@@ -25,6 +25,16 @@
 
 将本插件目录放入 AstrBot 的 `data/plugins/` 下，然后在 WebUI 的插件市场/管理页启用即可。
 
+## 文件保存在哪里
+
+- **默认归档目录**：`<AstrBot根目录>/data/workspaces/group_logs/`
+- **归档文件**：`astrbot_YYYY-MM-DD.log`（按天一个文件，如 `astrbot_2026-08-22.log`）
+- **增量状态文件**：同目录下的 `.export_state.json`（记录导出进度，勿删）
+
+不确定路径时，群里发送 `/log_archive status`，插件会直接告诉你实际归档路径和文件列表。
+
+想改存放位置，在插件配置里设置 `output_dir`（见下方配置项）。
+
 ## 使用
 
 发送指令（群聊或私聊均可）：
