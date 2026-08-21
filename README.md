@@ -1,8 +1,6 @@
 # Group Log Archive (群聊日志归档)
 
-<p align="center">
-  <img src="logo.png" width="120" alt="logo"/>
-</p>
+![logo](logo.png)
 
 一个 [AstrBot](https://github.com/Soulter/AstrBot) 插件：定时将 AstrBot 文件日志中的**群聊记录**增量导出为按天归档的纯文本文件，只保留聊天内容，省空间、省上下文。
 
