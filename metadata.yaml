@@ -22,6 +22,9 @@ version: 1.0.0
 # 作者名
 author: Fangnai-byte
 
+# (可选) 插件 Logo 文件名（对应插件目录下的 logo.png）
+logo: logo.png
+
 # (可选) 你的 GitHub 仓库地址
 repo: "https://github.com/Fangnai-byte/astrbot_plugin_group_log_archive"
 
