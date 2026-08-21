@@ -30,7 +30,7 @@ repo: "https://github.com/Fangnai-byte/astrbot_plugin_group_log_archive"
 
 # (新增) 声明支持的平台
 support_platforms:
-  - qq
+  - aiocqhttp
 
 # (新增) 声明支持的 AstrBot 版本范围
 astrbot_version: ">=3.8.0"
