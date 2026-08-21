@@ -1,0 +1,34 @@
+# 插件的唯一标识名 (不要改)
+name: astrbot_plugin_group_log_archive
+
+# 插件展示名 (显示在 UI 界面上的名字，可以更友好)
+display_name: Group Log Archive (群聊日志归档)
+
+# 插件的一句话简介
+desc: 定时将 AstrBot 日志中的群聊记录导出为按天归档的纯文本文件，只保留聊天内容，节省空间与上下文。
+
+# 插件的详细帮助信息或指令列表
+help: |
+  插件会按配置的间隔定时增量导出群聊记录，导出后清空源日志，避免双份增长。
+  指令：
+    /log_archive status - 查看状态
+    /log_archive now    - 立即导出一轮
+    /log_archive clean  - 手动清空源日志
+    /log_archive help   - 显示帮助
+
+# 插件版本号
+version: 1.0.0
+
+# 作者名
+author: Fangnai
+
+# (可选) 你的 GitHub 仓库地址
+repo: "https://github.com/Fangnai-byte/astrbot_plugin_group_log_archive"
+
+# (新增) 声明支持的平台
+support_platforms:
+  - aiocqhttp
+  - all
+
+# (新增) 声明支持的 AstrBot 版本范围
+astrbot_version: ">=3.8.0"

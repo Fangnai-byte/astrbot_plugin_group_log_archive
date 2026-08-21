@@ -1,0 +1,38 @@
+{
+  "poll_interval": {
+    "description": "轮询导出间隔（秒）",
+    "hint": "每隔多少秒增量导出一轮日志，最小 5 秒。",
+    "type": "int",
+    "default": 60
+  },
+  "log_dir": {
+    "description": "源日志目录",
+    "hint": "AstrBot 日志所在目录，留空自动使用 data/logs。需在 AstrBot 配置中开启文件日志并设为 DEBUG 级别，才会记录群消息原文。",
+    "type": "text",
+    "default": ""
+  },
+  "log_prefix": {
+    "description": "源日志文件名前缀",
+    "hint": "例如 astrbot.log，会同时处理 astrbot.log.1/.2 等轮转文件。",
+    "type": "text",
+    "default": "astrbot.log"
+  },
+  "output_dir": {
+    "description": "归档输出目录",
+    "hint": "按天归档文件保存位置，留空自动使用 data/workspaces/group_logs。",
+    "type": "text",
+    "default": ""
+  },
+  "only_chat": {
+    "description": "只保留聊天记录",
+    "hint": "开启后只导出群聊记录行（含群号/昵称/时间/内容），过滤掉系统调试与 LLM 请求日志。",
+    "type": "bool",
+    "default": true
+  },
+  "clean_source": {
+    "description": "导出后清空源日志",
+    "hint": "开启后每次导出完成即清空活跃源日志（truncate，保留文件），并删除轮转文件，避免双份增长。",
+    "type": "bool",
+    "default": true
+  }
+}
