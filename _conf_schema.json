@@ -70,5 +70,17 @@
     "hint": "cleanup_images 开启时，图片保留多少天，超过自动删除。",
     "type": "int",
     "default": 7
+  },
+  "image_caption": {
+    "description": "AI 图片命名",
+    "hint": "开启后用识图模型为保存的图片生成 5-6 字简短名称（会消耗 API token）。",
+    "type": "bool",
+    "default": false
+  },
+  "image_caption_provider": {
+    "description": "命名用模型 Provider ID",
+    "hint": "留空自动使用默认模型。需支持图片识别（如 xiaomi/mimo-v2.5）。",
+    "type": "text",
+    "default": ""
   }
 }
