@@ -56,6 +56,10 @@
 | `output_dir` | 归档输出目录，留空自动使用 `data/workspaces/group_logs` | 空 |
 | `only_chat` | 只保留聊天记录 | `true` |
 | `clean_source` | 导出后清空源日志 | `true` |
+| `mask_group_id` | 群号脱敏（哈希替代，文件名+内容均生效） | `false` |
+| `mask_qq_id` | QQ号脱敏（打码如 `123****456`） | `false` |
+
+> 隐私提示：默认**不脱敏**，归档为原始记录（含群号/昵称/内容）。如需分享归档，建议开启脱敏配置。
 
 ## 归档格式
 
