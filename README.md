@@ -59,7 +59,7 @@
 | `clean_source` | 导出后清空源日志 | `true` |
 | `mask_group_id` | 群号脱敏（哈希替代，文件名+内容均生效） | `false` |
 | `mask_qq_id` | QQ号脱敏（打码如 `123****456`） | `false` |
-| `track_images` | 图片追踪：图片消息自动复制到归档 `tu/` 目录，日志行追加 `[图:tu/xxx.png]` | `false` |
+| `track_images` | 图片追踪：实时监听群消息，图片自动保存到归档 `tu/` 目录并记录 | `false` |
 | `cleanup_images` | 自动清理：按保留天数清理 `tu/` 目录图片 | `false` |
 | `image_retention_days` | 图片保留天数（配合 `cleanup_images`） | `7` |
 
@@ -67,13 +67,15 @@
 
 ## 图片功能
 
-开启 `track_images` 后，群里发的图片会被自动匹配并复制到归档目录的 `tu/` 子文件夹，日志行末尾追加标注：
+开启 `track_images` 后，插件会**实时监听**群消息，群里发的图片/文件图片会被立即保存到归档目录的 `tu/` 子文件夹，同时在当天的分群归档文件里追加一条记录：
 
 ```
-[2026-08-22 01:33:55.519] [Plug] [DBUG] [astrbot.group_chat_context:158]: group_chat_context | pre-config:GroupMessage:748791823 | [昵称/01:33:55]:  [Image] [图:tu/compressed_xxx.png]
+[2026-08-22 13:08:05.839] [Plug] [INFO] [astrbot.group_log_archive]: group_chat_context | pre-config:GroupMessage:748791823 | [Fangnai/13:08:05]: [图片] [图:tu/img_20260822130805_0.jpg]
 ```
 
-图片按消息时间在 `data/temp` 中匹配（30 秒内最近的一张），复制到 `tu/` 后与日志同目录保存，方便查看。
+- 图片以 `img_时间戳_序号.扩展名` 命名，与归档记录一一对应
+- 纯图片、文件图片、动画表情都能捕获（不依赖日志，事件实时驱动）
+- 群号脱敏开启时，文件名与记录中的群号会同步使用哈希
 
 开启 `cleanup_images` 后，会按 `image_retention_days`（默认 7 天）自动清理 `tu/` 目录下过期的图片，避免占用过多空间。
 
