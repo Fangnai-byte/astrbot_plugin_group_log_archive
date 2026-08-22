@@ -128,7 +128,7 @@ class GroupLogArchive(Star):
                 lambda m: f"pre-config:GroupMessage:{self._mask_id(m.group(1))}", text
             )
         if self.config.get("mask_qq_id", False):
-            # QQ 号常出现在引用的括号中，如 (3430088565)
+            # QQ 号常出现在引用的括号中，如 (10001)
             text = QQ_ID_RE.sub(
                 lambda m: f"({m.group(1)[:3]}****{m.group(1)[-3:]})", text
             )
