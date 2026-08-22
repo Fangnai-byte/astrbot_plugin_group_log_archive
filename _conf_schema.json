@@ -52,5 +52,23 @@
     "hint": "开启后日志中的 QQ 号打码显示（如 123****456），保护个人隐私。",
     "type": "bool",
     "default": false
+  },
+  "track_images": {
+    "description": "图片追踪",
+    "hint": "开启后图片消息会自动匹配并复制图片到归档目录的 tu/ 子文件夹，日志行追加 [图:tu/xxx.png] 标注。",
+    "type": "bool",
+    "default": false
+  },
+  "cleanup_images": {
+    "description": "自动清理图片",
+    "hint": "开启后按 image_retention_days 自动清理 tu/ 目录下过期的图片。",
+    "type": "bool",
+    "default": false
+  },
+  "image_retention_days": {
+    "description": "图片保留天数",
+    "hint": "cleanup_images 开启时，图片保留多少天，超过自动删除。",
+    "type": "int",
+    "default": 7
   }
 }
