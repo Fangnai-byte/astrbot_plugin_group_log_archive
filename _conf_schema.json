@@ -34,5 +34,17 @@
     "hint": "开启后每次导出完成即清空活跃源日志（truncate，保留文件），并删除轮转文件，避免双份增长。",
     "type": "bool",
     "default": true
+  },
+  "mask_group_id": {
+    "description": "群号脱敏",
+    "hint": "开启后群号用哈希替代（文件名和内容中均生效），保护群隐私。",
+    "type": "bool",
+    "default": false
+  },
+  "mask_qq_id": {
+    "description": "QQ号脱敏",
+    "hint": "开启后日志中的 QQ 号打码显示（如 123****456），保护个人隐私。",
+    "type": "bool",
+    "default": false
   }
 }
