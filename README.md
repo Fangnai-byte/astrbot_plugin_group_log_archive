@@ -57,6 +57,7 @@
 | `log_prefix` | 源日志文件名前缀 | `astrbot.log` |
 | `log_source` | 聊天记录日志源：`auto`=自动检测；`group_chat_context`=需开 DEBUG（含群号，信息全）；`event_bus`=INFO 即可（未开 DEBUG 时自动使用，无法分群） | `auto` |
 | `auto_enable_debug` | 自动开启 DEBUG：检测到未开 DEBUG 时自动修改 AstrBot 配置（`log_level=DEBUG` + 文件日志），重启后生效 | `false` |
+| `log_cleanup` | 日志自动清理：格式 `<天数>day/<时>:<分>[:<秒>]`，如 `3day/00:00:00:000`（保留3天、每天零点清理）、`7day/04:30`；留空不清理 | 空 |
 | `output_dir` | 归档输出目录，留空自动使用 `data/workspaces/group_logs` | 空 |
 | `only_chat` | 只保留聊天记录 | `true` |
 | `clean_source` | 导出后清空源日志 | `true` |
