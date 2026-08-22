@@ -17,6 +17,8 @@ import os
 import re
 import shutil
 import time
+
+import httpx
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -24,7 +26,9 @@ from apscheduler.triggers.cron import CronTrigger
 
 from astrbot.api import logger, AstrBotConfig
 from astrbot.api.event import filter, AstrMessageEvent
+from astrbot.api.event.filter import EventMessageType
 from astrbot.api.star import Context, Star
+from astrbot.core.message.components import Image
 
 try:
     from astrbot.core.utils.astrbot_path import get_astrbot_data_path
@@ -399,6 +403,80 @@ class GroupLogArchive(Star):
                 logger.info(f"[GroupLogArchive] 最终导出完成，本次 {n} 字节")
         except Exception as e:
             logger.error(f"[GroupLogArchive] 最终导出失败: {e}")
+
+    # ---------------- 图片事件监听 ----------------
+    @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
+    async def on_group_image(self, event: AstrMessageEvent):
+        """群里发图片时实时保存到 tu/ 并在归档追加记录"""
+        if not self.config.get("track_images", False):
+            return
+        try:
+            chain = getattr(event.message_obj, "message", None) or []
+            images = [c for c in chain if isinstance(c, Image)]
+            if not images:
+                return
+            group_id = str(event.get_group_id() or "unknown")
+            _sender = getattr(event.message_obj, "sender", None)
+            nickname = (
+                str(getattr(_sender, "nickname", "") or "")
+                if _sender is not None
+                else ""
+            )
+            now = datetime.now()
+            # 群号脱敏（与归档保持一致）
+            out_group = group_id
+            if self.config.get("mask_group_id", False):
+                out_group = self._mask_id(group_id)
+
+            out_dir = self._out_dir()
+            tu_dir = os.path.join(out_dir, "tu")
+            os.makedirs(tu_dir, exist_ok=True)
+            saved = []
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                for img in images:
+                    src = img.file or img.url or ""
+                    if not src:
+                        continue
+                    ext = os.path.splitext(src.split("?")[0])[1].lower()
+                    if ext not in (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"):
+                        ext = ".jpg"
+                    fname = f"img_{now.strftime('%Y%m%d%H%M%S')}_{len(saved)}{ext}"
+                    dest = os.path.join(tu_dir, fname)
+                    try:
+                        if src.startswith(("http://", "https://")):
+                            r = await client.get(src)
+                            if r.status_code == 200 and r.content:
+                                with open(dest, "wb") as f:
+                                    f.write(r.content)
+                                saved.append(f"tu/{fname}")
+                        elif src.startswith("file://"):
+                            p = src[len("file://"):]
+                            if os.path.exists(p):
+                                shutil.copy2(p, dest)
+                                saved.append(f"tu/{fname}")
+                        elif img.path and os.path.exists(img.path):
+                            shutil.copy2(img.path, dest)
+                            saved.append(f"tu/{fname}")
+                    except Exception as e:
+                        logger.debug(f"[GroupLogArchive] 单张图片保存失败: {e}")
+            if saved:
+                # 追加归档记录（与导出的分群文件同格式）
+                line = (
+                    f"[{now.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] [Plug] [INFO] "
+                    f"[astrbot.group_log_archive]: group_chat_context | "
+                    f"pre-config:GroupMessage:{out_group} | [{nickname}/{now.strftime('%H:%M:%S')}]: "
+                    f"[图片] " + " ".join(f"[图:{s}]" for s in saved) + "\n"
+                )
+                log_path = os.path.join(
+                    out_dir, f"astrbot_{out_group}_{now.strftime('%Y-%m-%d')}.log"
+                )
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(line)
+                logger.info(
+                    f"[GroupLogArchive] 图片已保存 {len(saved)} 张 → tu/（群 {out_group}）"
+                )
+        except Exception as e:
+            logger.error(f"[GroupLogArchive] 图片事件处理失败: {e}")
 
     # ---------------- 指令 ----------------
     @filter.command("log_archive")
