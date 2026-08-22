@@ -51,7 +51,15 @@ CHAT_RE = re.compile(
 LINE_TS_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) \d{2}:\d{2}:\d{2}")
 GROUP_ID_RE = re.compile(r"pre-config:GroupMessage:(\d+)")
 QQ_ID_RE = re.compile(r"\((\d{6,12})\)")
+QQ_SLASH_RE = re.compile(r"/(\d{6,12})[:：]")
 IMAGE_MARKER_RE = re.compile(r"\[Image\]|\[图片\]")
+# event_bus 行（INFO 级别，兼容未开 DEBUG 的环境）：
+# [时间] [Core] [INFO] [core.event_bus:74]: [default] [账号(aiocqhttp)] 昵称/QQ: 内容
+EVENT_BUS_RE = re.compile(
+    r"^\[(?:\d{4}-\d{2}-\d{2} )?\d{2}:\d{2}:\d{2}\.\d+\] "
+    r"\[Core\] \[INFO\] \[core\.event_bus:\d+\]: "
+    r"\[default\] \[[^\]]+\(aiocqhttp\)\] "
+)
 MSG_TS_RE = re.compile(r"\[([^\]]+)/(\d{2}:\d{2}:\d{2})\]:")
 
 
@@ -62,6 +70,7 @@ class GroupLogArchive(Star):
         self._scheduler: AsyncIOScheduler | None = None
         self._lock = asyncio.Lock()
         self._state: dict = {}
+        self._chat_source: str = ""  # group_chat_context / event_bus（auto 检测结果）
         self._load_state()
 
     # ---------------- 路径解析 ----------------
@@ -114,7 +123,41 @@ class GroupLogArchive(Star):
     def _is_chat_line(self, line: str) -> bool:
         if not self.config.get("only_chat", True):
             return True
+        if self._chat_source == "event_bus":
+            return bool(EVENT_BUS_RE.match(line))
         return bool(CHAT_RE.match(line))
+
+    def _detect_chat_source(self) -> None:
+        """检测源日志里实际存在的聊天记录类型：
+        优先 group_chat_context（需要 DEBUG），否则回退 event_bus（INFO 即可）"""
+        configured = str(self.config.get("log_source", "") or "").strip()
+        if configured in ("group_chat_context", "event_bus"):
+            self._chat_source = configured
+            return
+        # auto：扫描源日志前 300 行判断
+        path = os.path.join(self._log_dir(), self._log_prefix)
+        if not os.path.exists(path):
+            self._chat_source = "group_chat_context"
+            return
+        gc = eb = 0
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                for i, line in enumerate(f):
+                    if i >= 300:
+                        break
+                    if CHAT_RE.match(line):
+                        gc += 1
+                    elif EVENT_BUS_RE.match(line):
+                        eb += 1
+        except Exception as e:
+            logger.debug(f"[GroupLogArchive] 检测日志源失败: {e}")
+        if gc > 0:
+            self._chat_source = "group_chat_context"
+        elif eb > 0:
+            self._chat_source = "event_bus"
+        else:
+            self._chat_source = "group_chat_context"
+        logger.info(f"[GroupLogArchive] 日志源检测: {self._chat_source}")
 
     def _route_line(self, line: str, fallback_date: str) -> str:
         """按行首时间戳 + 群号路由到对应文件（分群、按天）"""
@@ -143,6 +186,10 @@ class GroupLogArchive(Star):
             # QQ 号常出现在引用的括号中，如 (10001)
             text = QQ_ID_RE.sub(
                 lambda m: f"({m.group(1)[:3]}****{m.group(1)[-3:]})", text
+            )
+            # event_bus 行格式：昵称/QQ:
+            text = QQ_SLASH_RE.sub(
+                lambda m: f"/{m.group(1)[:3]}****{m.group(1)[-3:]}:", text
             )
         return text
 
@@ -505,6 +552,7 @@ class GroupLogArchive(Star):
 
     # ---------------- 生命周期 ----------------
     async def initialize(self) -> None:
+        await asyncio.to_thread(self._detect_chat_source)
         cron_expr = str(self.config.get("cron_expression", "") or "").strip()
         # 支持简单时间格式 HH:MM（如 12:00 = 每天中午12点）
         m = re.match(r"^(\d{1,2}):(\d{2})$", cron_expr)
