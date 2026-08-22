@@ -381,7 +381,7 @@ class GroupLogArchive(Star):
                             {"type": "text", "text": "用中文给这张图片起一个5-6个字的简短名称，直接输出名称本身。"},
                         ],
                     }],
-                    "max_tokens": 100,
+                    "max_tokens": 600,
                 }
                 async with httpx.AsyncClient(timeout=40) as client:
                     r = await client.post(
@@ -394,8 +394,14 @@ class GroupLogArchive(Star):
                 msg = resp["choices"][0]["message"]
                 text = (msg.get("content") or "").strip()
                 if not text:
-                    rc = (msg.get("reasoning_content") or "").strip()
-                    if rc:
+                    rc = msg.get("reasoning_content") or ""
+                    quoted = re.findall(
+                        r"[\'\"“”『』「」]([^\'\"“”『』「」]{2,10})[\'\"“”『』「」]",
+                        rc,
+                    )
+                    if quoted:
+                        text = quoted[-1]
+                    else:
                         lines = [l.strip() for l in rc.splitlines() if l.strip()]
                         text = lines[-1] if lines else ""
             else:
