@@ -155,6 +155,8 @@ class GroupLogArchive(Star):
             self._chat_source = "group_chat_context"
         elif eb > 0:
             self._chat_source = "event_bus"
+            if self.config.get("auto_enable_debug", False):
+                self._auto_enable_debug()
         else:
             self._chat_source = "group_chat_context"
         logger.info(f"[GroupLogArchive] 日志源检测: {self._chat_source}")
@@ -192,6 +194,32 @@ class GroupLogArchive(Star):
                 lambda m: f"/{m.group(1)[:3]}****{m.group(1)[-3:]}:", text
             )
         return text
+
+    def _auto_enable_debug(self) -> bool:
+        """自动修改 AstrBot 配置：开启 DEBUG 级别 + 文件日志（需重启生效）"""
+        try:
+            cfg_path = os.path.join(get_astrbot_data_path(), "cmd_config.json")
+            with open(cfg_path, encoding="utf-8-sig") as f:
+                cfg = json.load(f)
+            changed = False
+            if str(cfg.get("log_level", "")).upper() != "DEBUG":
+                cfg["log_level"] = "DEBUG"
+                changed = True
+            if not cfg.get("log_file_enable"):
+                cfg["log_file_enable"] = True
+                changed = True
+            if changed:
+                import shutil as _sh
+                _sh.copy2(cfg_path, cfg_path + ".bak_auto_debug")
+                with open(cfg_path, "w", encoding="utf-8") as f:
+                    json.dump(cfg, f, ensure_ascii=False, indent=2)
+                logger.warning(
+                    "[GroupLogArchive] 已自动开启 DEBUG + 文件日志，请重启 AstrBot 生效"
+                )
+            return changed
+        except Exception as e:
+            logger.warning(f"[GroupLogArchive] 自动开启 DEBUG 失败: {e}")
+            return False
 
     # ---------------- 增量导出 ----------------
     def _export_file(self, path: str, state_key: str) -> int:
