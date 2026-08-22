@@ -104,6 +104,23 @@
 
 包含：群号、发送者昵称、时间、消息内容（含引用与 @ 标记）。文件按群号+日期路由，未加密。
 
+## 常见问题（FAQ）
+
+**Q：装了插件但没有日志输出？**
+A：一般是 AstrBot 没开**文件日志**或日志级别不是 DEBUG。优先在插件配置里打开 `auto_enable_debug`（会自动修改 AstrBot 配置，重启生效）；或手动在 WebUI 设置里开 `log_file_enable=true`、`log_level=DEBUG`。
+
+**Q：一定要开 DEBUG 吗？**
+A：不开也能用——插件会**自动检测**并回退到 INFO 级别的 `event_bus` 日志（`log_source=auto`），消息照常记录；但 event_bus 行**不含群号**，归档到 `astrbot_unknown_日期.log`。想按群分文件，还是建议开 DEBUG（`group_chat_context` 含群号）。
+
+**Q：图片没有自动保存？**
+A：检查插件配置里 `track_images` 是否开启；开启后图片实时保存到归档目录的 `tu/` 子文件夹（保存的是原图）。
+
+**Q：AI 命名没生效？**
+A：确认 `image_caption` 已开启、`image_caption_provider` 指向支持识图的模型（留空自动选视觉模型）。命名是后台异步的，稍等片刻；失败会自动保持原名。注意会消耗模型 API token。
+
+**Q：归档文件在哪？**
+A：默认 `data/workspaces/group_logs/`，群里发 `/log_archive status` 可直接查看实际路径和文件列表。
+
 ## 设计说明
 
 - **为什么只匹配 `[astrbot.group_chat_context:` 行？**
