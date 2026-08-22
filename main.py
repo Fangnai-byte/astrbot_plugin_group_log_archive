@@ -18,6 +18,7 @@ import re
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from astrbot.api import logger, AstrBotConfig
 from astrbot.api.event import filter, AstrMessageEvent
@@ -254,22 +255,49 @@ class GroupLogArchive(Star):
 
     # ---------------- 生命周期 ----------------
     async def initialize(self) -> None:
-        interval = int(self.config.get("poll_interval", 60))
-        if interval < 5:
-            interval = 5
+        cron_expr = str(self.config.get("cron_expression", "") or "").strip()
+        interval = max(int(self.config.get("poll_interval", 60)), 5)
         self._scheduler = AsyncIOScheduler()
-        self._scheduler.add_job(
-            self._tick,
-            "interval",
-            seconds=interval,
-            id="group_log_archive_tick",
-            max_instances=1,
-            coalesce=True,
-        )
+        if cron_expr:
+            try:
+                trigger = CronTrigger.from_crontab(cron_expr)
+                self._scheduler.add_job(
+                    self._tick,
+                    trigger,
+                    id="group_log_archive_cron",
+                    max_instances=1,
+                    coalesce=True,
+                )
+                logger.info(
+                    f"[GroupLogArchive] 已启动 | 源: {self._log_dir()}/{self._log_prefix}* "
+                    f"→ {self._out_dir()} | cron: {cron_expr}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[GroupLogArchive] cron 表达式无效({cron_expr})，回退到间隔模式: {e}"
+                )
+                self._scheduler.add_job(
+                    self._tick,
+                    "interval",
+                    seconds=interval,
+                    id="group_log_archive_tick",
+                    max_instances=1,
+                    coalesce=True,
+                )
+        else:
+            self._scheduler.add_job(
+                self._tick,
+                "interval",
+                seconds=interval,
+                id="group_log_archive_tick",
+                max_instances=1,
+                coalesce=True,
+            )
         self._scheduler.start()
         logger.info(
-            f"[GroupLogArchive] 已启动 | 源: {self._log_dir()}/{self._log_prefix}* "
-            f"→ {self._out_dir()} | 间隔 {interval}s"
+            f"[GroupLogArchive] 定时任务已启动 | 间隔 {interval}s"
+            if not cron_expr
+            else f"[GroupLogArchive] 定时任务已启动 | cron {cron_expr}"
         )
         # 启动后立即跑一次
         asyncio.create_task(self._tick())
