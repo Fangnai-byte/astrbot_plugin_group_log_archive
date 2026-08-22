@@ -51,6 +51,7 @@
 | 配置项 | 说明 | 默认值 |
 | --- | --- | --- |
 | `poll_interval` | 轮询导出间隔（秒），最小 5 | `60` |
+| `cron_expression` | 定时导出 cron 表达式（如 `0 3 * * *` 每天3点、`*/5 * * * *` 每5分钟），留空用间隔模式 | 空 |
 | `log_dir` | 源日志目录，留空自动使用 `data/logs` | 空 |
 | `log_prefix` | 源日志文件名前缀 | `astrbot.log` |
 | `output_dir` | 归档输出目录，留空自动使用 `data/workspaces/group_logs` | 空 |
