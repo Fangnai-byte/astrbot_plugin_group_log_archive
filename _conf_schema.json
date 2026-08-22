@@ -1,9 +1,15 @@
 {
   "poll_interval": {
     "description": "轮询导出间隔（秒）",
-    "hint": "每隔多少秒增量导出一轮日志，最小 5 秒。",
+    "hint": "间隔模式下的轮询秒数，最小 5 秒。设置了 cron_expression 后此项忽略。",
     "type": "int",
     "default": 60
+  },
+  "cron_expression": {
+    "description": "定时导出 cron 表达式",
+    "hint": "如 0 3 * * *（每天凌晨3点）、*/5 * * * *（每5分钟）。留空则使用间隔模式。分 时 日 月 周。",
+    "type": "text",
+    "default": ""
   },
   "log_dir": {
     "description": "源日志目录",
