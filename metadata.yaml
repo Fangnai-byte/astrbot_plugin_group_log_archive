@@ -17,7 +17,7 @@ help: |
     /log_archive help   - 显示帮助
 
 # 插件版本号
-version: 1.0.2
+version: 1.1.0
 
 # 作者名
 author: Fangnai-byte
