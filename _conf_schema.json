@@ -29,6 +29,12 @@
     "type": "text",
     "default": "auto"
   },
+  "auto_enable_debug": {
+    "description": "自动开启 DEBUG 日志",
+    "hint": "开启后，检测到未开启 DEBUG 时自动修改 AstrBot 配置（log_level=DEBUG + 文件日志），提示重启后生效。",
+    "type": "bool",
+    "default": false
+  },
   "output_dir": {
     "description": "归档输出目录",
     "hint": "按天归档文件保存位置，留空自动使用 data/workspaces/group_logs。",
