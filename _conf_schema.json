@@ -35,6 +35,12 @@
     "type": "bool",
     "default": false
   },
+  "log_cleanup": {
+    "description": "日志自动清理",
+    "hint": "格式：<天数>day/<时>:<分>[:<秒>]，如 3day/00:00:00:000（保留3天，每天零点清理）、7day/04:30。留空不清理。",
+    "type": "text",
+    "default": ""
+  },
   "output_dir": {
     "description": "归档输出目录",
     "hint": "按天归档文件保存位置，留空自动使用 data/workspaces/group_logs。",
