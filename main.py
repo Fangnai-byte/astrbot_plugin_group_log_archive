@@ -11,6 +11,7 @@ Group Log Archive - AstrBot 群聊日志归档插件
       group_chat_context | pre-config:GroupMessage:<群号> | [<昵称>/<时间>]: <内容>
 """
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -39,6 +40,7 @@ CHAT_RE = re.compile(
 )
 LINE_TS_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) \d{2}:\d{2}:\d{2}")
 GROUP_ID_RE = re.compile(r"pre-config:GroupMessage:(\d+)")
+QQ_ID_RE = re.compile(r"\((\d{6,12})\)")
 
 
 class GroupLogArchive(Star):
@@ -111,7 +113,26 @@ class GroupLogArchive(Star):
             date = fallback_date
         gm = GROUP_ID_RE.search(line)
         gid = gm.group(1) if gm else "unknown"
+        if self.config.get("mask_group_id", False) and gid != "unknown":
+            gid = self._mask_id(gid)
         return os.path.join(self._out_dir(), f"astrbot_{gid}_{date}.log")
+
+    def _mask_id(self, value: str) -> str:
+        """群号哈希脱敏（md5 前 10 位）"""
+        return hashlib.md5(value.encode("utf-8")).hexdigest()[:10]
+
+    def _sanitize(self, text: str) -> str:
+        """按配置对日志行做脱敏处理"""
+        if self.config.get("mask_group_id", False):
+            text = GROUP_ID_RE.sub(
+                lambda m: f"pre-config:GroupMessage:{self._mask_id(m.group(1))}", text
+            )
+        if self.config.get("mask_qq_id", False):
+            # QQ 号常出现在引用的括号中，如 (3430088565)
+            text = QQ_ID_RE.sub(
+                lambda m: f"({m.group(1)[:3]}****{m.group(1)[-3:]})", text
+            )
+        return text
 
     # ---------------- 增量导出 ----------------
     def _export_file(self, path: str, state_key: str) -> int:
@@ -156,6 +177,7 @@ class GroupLogArchive(Star):
                     if not self._is_chat_line(text):
                         continue
                     target = self._route_line(text, fallback_date)
+                    text = self._sanitize(text)
                     with open(target, "a", encoding="utf-8") as out:
                         out.write(text + "\n")
                     exported += len(line) + 1
@@ -165,6 +187,7 @@ class GroupLogArchive(Star):
                 text = buf.decode("utf-8", errors="replace")
                 if self._is_chat_line(text):
                     target = self._route_line(text, fallback_date)
+                    text = self._sanitize(text)
                     with open(target, "a", encoding="utf-8") as out:
                         out.write(text + "\n")
                     exported += len(buf)
