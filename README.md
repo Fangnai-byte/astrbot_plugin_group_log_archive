@@ -55,6 +55,7 @@
 | `cron_expression` | 定时导出时间，支持简单格式 `12:00`（每天12点）或完整 cron（如 `0 3 * * *`、`*/5 * * * *`），留空用间隔模式 | 空 |
 | `log_dir` | 源日志目录，留空自动使用 `data/logs` | 空 |
 | `log_prefix` | 源日志文件名前缀 | `astrbot.log` |
+| `log_source` | 聊天记录日志源：`auto`=自动检测；`group_chat_context`=需开 DEBUG（含群号，信息全）；`event_bus`=INFO 即可（未开 DEBUG 时自动使用，无法分群） | `auto` |
 | `output_dir` | 归档输出目录，留空自动使用 `data/workspaces/group_logs` | 空 |
 | `only_chat` | 只保留聊天记录 | `true` |
 | `clean_source` | 导出后清空源日志 | `true` |
@@ -84,7 +85,7 @@
 
 ### AI 图片命名（可选）
 
-开启 `image_caption` 后，保存的图片会调用**识图模型**自动生成 5-6 字名称并重命名（如 `img_20260822134634_0_绫地宁宁.jpg`），归档记录同步更新：
+开启 `image_caption` 后，保存的图片会调用**识图模型**自动生成 5-6 字名称并重命名（如 `img_20260822134634_0_委屈的小狐狸.jpg`），归档记录同步更新：
 
 - `image_caption_provider` 留空时自动选择支持视觉的模型（优先模型名含 vision/vl/mimo/glm-4v/qwen-vl 的）
 - 识别前自动压缩图片（仅用于识别，**保存的仍是原图**），速度提升 10 倍+（约 3 秒）
