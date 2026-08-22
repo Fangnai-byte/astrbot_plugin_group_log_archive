@@ -256,6 +256,10 @@ class GroupLogArchive(Star):
     # ---------------- 生命周期 ----------------
     async def initialize(self) -> None:
         cron_expr = str(self.config.get("cron_expression", "") or "").strip()
+        # 支持简单时间格式 HH:MM（如 12:00 = 每天中午12点）
+        m = re.match(r"^(\d{1,2}):(\d{2})$", cron_expr)
+        if m:
+            cron_expr = f"{int(m.group(2))} {int(m.group(1))} * * *"
         interval = max(int(self.config.get("poll_interval", 60)), 5)
         self._scheduler = AsyncIOScheduler()
         if cron_expr:
