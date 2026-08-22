@@ -11,6 +11,7 @@ Group Log Archive - AstrBot 群聊日志归档插件
       group_chat_context | pre-config:GroupMessage:<群号> | [<昵称>/<时间>]: <内容>
 """
 import asyncio
+import base64
 import hashlib
 import json
 import os
@@ -324,6 +325,153 @@ class GroupLogArchive(Star):
         if removed:
             logger.info(f"[GroupLogArchive] 清理过期图片 {removed} 个")
 
+    # ---------------- AI 图片命名 ----------------
+    def _default_provider(self) -> str:
+        """读取默认启用的模型 provider id，优先选择支持视觉的模型"""
+        try:
+            cfg_path = os.path.join(get_astrbot_data_path(), "cmd_config.json")
+            with open(cfg_path, encoding="utf-8-sig") as f:
+                cfg = json.load(f)
+            providers = [p for p in (cfg.get("provider") or []) if p.get("enable")]
+            # 优先视觉模型
+            for p in providers:
+                pid = str(p.get("id") or "")
+                if any(k in pid.lower() for k in ("vision", "vl", "mimo", "glm-4v", "qwen-vl")):
+                    return pid
+            if providers:
+                return str(providers[0].get("id") or "")
+        except Exception as e:
+            logger.debug(f"[GroupLogArchive] 读取默认 provider 失败: {e}")
+        return ""
+
+    async def _ask_caption(self, provider: str, rel_path: str) -> str | None:
+        """调用识图模型给图片生成 5-6 字名称。
+
+        xiaomi/mimo 系推理模型直连其 API（内容在 reasoning_content 中），
+        其余 provider 走 AstrBot llm_generate。
+        """
+        try:
+            full = os.path.join(self._out_dir(), rel_path)
+            if not os.path.exists(full):
+                return None
+            if provider.startswith("xiaomi"):
+                cfg_path = os.path.join(get_astrbot_data_path(), "cmd_config.json")
+                with open(cfg_path, encoding="utf-8-sig") as f:
+                    cfg = json.load(f)
+                key = api_base = None
+                for s in cfg.get("provider_sources", []) or []:
+                    if s.get("id") == "xiaomi":
+                        key = (s.get("key") or [""])[0]
+                        api_base = s.get("api_base", "https://api.xiaomimimo.com/v1")
+                        break
+                if not key:
+                    return None
+                model = provider.split("/")[-1] if "/" in provider else provider
+                ext = os.path.splitext(full)[1].lstrip(".").lower() or "jpeg"
+                if ext == "jpg":
+                    ext = "jpeg"
+                with open(full, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode()
+                payload = {
+                    "model": model,
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{b64}"}},
+                            {"type": "text", "text": "用中文给这张图片起一个5-6个字的简短名称，直接输出名称本身。"},
+                        ],
+                    }],
+                    "max_tokens": 100,
+                }
+                async with httpx.AsyncClient(timeout=40) as client:
+                    r = await client.post(
+                        f"{api_base}/chat/completions",
+                        json=payload,
+                        headers={"Authorization": f"Bearer {key}"},
+                    )
+                    r.raise_for_status()
+                    resp = r.json()
+                msg = resp["choices"][0]["message"]
+                text = (msg.get("content") or "").strip()
+                if not text:
+                    rc = (msg.get("reasoning_content") or "").strip()
+                    if rc:
+                        lines = [l.strip() for l in rc.splitlines() if l.strip()]
+                        text = lines[-1] if lines else ""
+            else:
+                resp = await asyncio.wait_for(
+                    self.context.llm_generate(
+                        chat_provider_id=provider,
+                        prompt=(
+                            "用中文给这张图片起一个 5-6 个字的简短名称。"
+                            "直接输出名称本身，不要引号、标点、编号或任何多余文字。"
+                        ),
+                        image_urls=[full],
+                        system_prompt="你是图片命名助手，只输出 5-6 个字的名称。",
+                    ),
+                    timeout=30,
+                )
+                text = str(getattr(resp, "result", "") or "").strip()
+            # 清洗：去编号(1.)、括号注释(（6字）)、引号、标点、空白
+            text = re.sub(r"^\d+[.、．]\s*", "", text)
+            text = re.sub(r"[（(][^）)]*[）)]", "", text)
+            text = text.strip().strip('"\'“”‘’').strip("。．.!！")
+            text = re.sub(r"[\n\r\t ]+", "", text)
+            if not text or len(text) > 10:
+                return None
+            return text
+        except Exception as e:
+            logger.warning(f"[GroupLogArchive] AI 命名失败({rel_path}): {e}")
+            return None
+
+    async def _caption_and_rename(self, saved: list, provider: str, log_path: str) -> None:
+        """后台任务：AI 命名并重命名图片，同步更新归档记录行"""
+        for rel in saved:
+            try:
+                name = await asyncio.wait_for(
+                    self._ask_caption(provider, rel), timeout=25
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"[GroupLogArchive] AI 命名超时: {rel}")
+                continue
+            except Exception as e:
+                logger.warning(f"[GroupLogArchive] AI 命名异常: {e}")
+                continue
+            if not name:
+                continue
+            try:
+                out_dir = self._out_dir()
+                old_full = os.path.join(out_dir, rel)
+                ext = os.path.splitext(old_full)[1]
+                stem = os.path.splitext(os.path.basename(rel))[0]
+                new_rel = f"tu/{stem}_{name}{ext}"
+                new_full = os.path.join(out_dir, new_rel)
+                os.rename(old_full, new_full)
+                # 更新归档记录行：把 [图:旧名] 替换为 [图:新名]
+                self._update_log_image_path(log_path, rel, new_rel)
+                logger.info(f"[GroupLogArchive] AI 命名: {rel} → {os.path.basename(new_rel)}")
+            except Exception as e:
+                logger.warning(f"[GroupLogArchive] 重命名失败({rel}): {e}")
+
+    def _update_log_image_path(self, log_path: str, old_rel: str, new_rel: str) -> None:
+        """在归档记录行中把旧图片路径替换为新路径"""
+        try:
+            if not os.path.exists(log_path):
+                return
+            with open(log_path, encoding="utf-8") as f:
+                lines = f.readlines()
+            changed = False
+            for i in range(len(lines) - 1, -1, -1):
+                if f"[图:{old_rel}]" in lines[i]:
+                    lines[i] = lines[i].replace(f"[图:{old_rel}]", f"[图:{new_rel}]")
+                    changed = True
+                    break
+            if changed:
+                with open(log_path, "w", encoding="utf-8") as f:
+                    f.writelines(lines)
+        except Exception as e:
+            logger.debug(f"[GroupLogArchive] 更新归档记录失败: {e}")
+
     # ---------------- 定时任务 ----------------
     async def _tick(self) -> None:
         try:
@@ -475,6 +623,16 @@ class GroupLogArchive(Star):
                 logger.info(
                     f"[GroupLogArchive] 图片已保存 {len(saved)} 张 → tu/（群 {out_group}）"
                 )
+                # AI 命名（后台异步，不阻塞事件处理）
+                if self.config.get("image_caption", False):
+                    provider = (
+                        str(self.config.get("image_caption_provider", "") or "").strip()
+                        or self._default_provider()
+                    )
+                    if provider:
+                        asyncio.create_task(
+                            self._caption_and_rename(saved, provider, log_path)
+                        )
         except Exception as e:
             logger.error(f"[GroupLogArchive] 图片事件处理失败: {e}")
 
