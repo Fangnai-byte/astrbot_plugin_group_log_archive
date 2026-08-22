@@ -38,6 +38,7 @@ CHAT_RE = re.compile(
     r"group_chat_context \| pre-config:GroupMessage:\d+ \| \["
 )
 LINE_TS_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) \d{2}:\d{2}:\d{2}")
+GROUP_ID_RE = re.compile(r"pre-config:GroupMessage:(\d+)")
 
 
 class GroupLogArchive(Star):
@@ -102,12 +103,15 @@ class GroupLogArchive(Star):
         return bool(CHAT_RE.match(line))
 
     def _route_line(self, line: str, fallback_date: str) -> str:
+        """按行首时间戳 + 群号路由到对应文件（分群、按天）"""
         m = LINE_TS_RE.match(line)
         if m:
-            return os.path.join(
-                self._out_dir(), f"astrbot_{m.group(1)}-{m.group(2)}-{m.group(3)}.log"
-            )
-        return os.path.join(self._out_dir(), f"astrbot_{fallback_date}.log")
+            date = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+        else:
+            date = fallback_date
+        gm = GROUP_ID_RE.search(line)
+        gid = gm.group(1) if gm else "unknown"
+        return os.path.join(self._out_dir(), f"astrbot_{gid}_{date}.log")
 
     # ---------------- 增量导出 ----------------
     def _export_file(self, path: str, state_key: str) -> int:
