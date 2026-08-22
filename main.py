@@ -402,6 +402,51 @@ class GroupLogArchive(Star):
         if removed:
             logger.info(f"[GroupLogArchive] 清理过期图片 {removed} 个")
 
+    # ---------------- 日志清理 ----------------
+    def _parse_cleanup_config(self):
+        """解析日志清理配置，格式：<天数>day/<时>:<分>[:<秒>]，如 3day/00:00:00:000"""
+        cfg = str(self.config.get("log_cleanup", "") or "").strip()
+        m = re.match(r"^(\d+)day/(\d{1,2}):(\d{2})(?::(\d{2}))?", cfg)
+        if not m:
+            return None
+        return (
+            int(m.group(1)),
+            int(m.group(2)) % 24,
+            int(m.group(3)) % 60,
+            int(m.group(4) or 0) % 60,
+        )
+
+    def _cleanup_logs(self) -> None:
+        """按配置删除归档目录中超过保留天数的日志文件"""
+        spec = self._parse_cleanup_config()
+        if not spec:
+            return
+        days = spec[0]
+        cutoff = time.time() - days * 86400
+        out_dir = self._out_dir()
+        removed = 0
+        try:
+            for fn in os.listdir(out_dir):
+                if not (fn.startswith("astrbot_") and fn.endswith(".log")):
+                    continue
+                fp = os.path.join(out_dir, fn)
+                try:
+                    if os.path.getmtime(fp) < cutoff:
+                        os.remove(fp)
+                        removed += 1
+                except OSError:
+                    continue
+        except OSError as e:
+            logger.warning(f"[GroupLogArchive] 清理日志失败: {e}")
+        if removed:
+            logger.info(f"[GroupLogArchive] 清理过期日志 {removed} 个（保留 {days} 天）")
+
+    async def _run_cleanup(self) -> None:
+        try:
+            await asyncio.to_thread(self._cleanup_logs)
+        except Exception as e:
+            logger.error(f"[GroupLogArchive] 日志清理任务异常: {e}")
+
     # ---------------- AI 图片命名 ----------------
     def _default_provider(self) -> str:
         """读取默认启用的模型 provider id，优先选择支持视觉的模型"""
@@ -622,6 +667,23 @@ class GroupLogArchive(Star):
                 id="group_log_archive_tick",
                 max_instances=1,
                 coalesce=True,
+            )
+        # 日志自动清理（log_cleanup 配置，如 3day/00:00:00:000）
+        cleanup_spec = self._parse_cleanup_config()
+        if cleanup_spec:
+            self._scheduler.add_job(
+                self._run_cleanup,
+                "cron",
+                hour=cleanup_spec[1],
+                minute=cleanup_spec[2],
+                second=cleanup_spec[3],
+                id="group_log_archive_cleanup",
+                max_instances=1,
+                coalesce=True,
+            )
+            logger.info(
+                f"[GroupLogArchive] 日志清理已启用 | 保留 {cleanup_spec[0]} 天，"
+                f"每天 {cleanup_spec[1]:02d}:{cleanup_spec[2]:02d}:{cleanup_spec[3]:02d} 执行"
             )
         self._scheduler.start()
         logger.info(
