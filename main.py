@@ -13,6 +13,7 @@ Group Log Archive - AstrBot 群聊日志归档插件
 import asyncio
 import base64
 import hashlib
+import io
 import json
 import os
 import re
@@ -20,6 +21,7 @@ import shutil
 import time
 
 import httpx
+from PIL import Image as PILImage
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -370,8 +372,18 @@ class GroupLogArchive(Star):
                 ext = os.path.splitext(full)[1].lstrip(".").lower() or "jpeg"
                 if ext == "jpg":
                     ext = "jpeg"
-                with open(full, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode()
+                # 压缩图片再识别（大图会显著拖慢推理，压缩后速度提升 10 倍+）
+                try:
+                    _img = PILImage.open(full)
+                    _img.thumbnail((512, 512))
+                    _buf = io.BytesIO()
+                    _fmt = "PNG" if full.lower().endswith(".png") else "JPEG"
+                    _img.convert("RGB").save(_buf, _fmt, quality=80)
+                    b64 = base64.b64encode(_buf.getvalue()).decode()
+                    ext = "png" if _fmt == "PNG" else "jpeg"
+                except Exception:
+                    with open(full, "rb") as f:
+                        b64 = base64.b64encode(f.read()).decode()
                 payload = {
                     "model": model,
                     "messages": [{
@@ -383,7 +395,7 @@ class GroupLogArchive(Star):
                     }],
                     "max_tokens": 600,
                 }
-                async with httpx.AsyncClient(timeout=40) as client:
+                async with httpx.AsyncClient(timeout=60) as client:
                     r = await client.post(
                         f"{api_base}/chat/completions",
                         json=payload,
@@ -435,7 +447,7 @@ class GroupLogArchive(Star):
         for rel in saved:
             try:
                 name = await asyncio.wait_for(
-                    self._ask_caption(provider, rel), timeout=25
+                    self._ask_caption(provider, rel), timeout=65
                 )
             except asyncio.TimeoutError:
                 logger.warning(f"[GroupLogArchive] AI 命名超时: {rel}")
