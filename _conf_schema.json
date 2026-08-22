@@ -23,6 +23,12 @@
     "type": "text",
     "default": "astrbot.log"
   },
+  "log_source": {
+    "description": "聊天记录日志源",
+    "hint": "auto=自动检测；group_chat_context=需开启DEBUG（信息最全，含群号）；event_bus=INFO级别即可（未开DEBUG时自动使用，但无法分群）。",
+    "type": "text",
+    "default": "auto"
+  },
   "output_dir": {
     "description": "归档输出目录",
     "hint": "按天归档文件保存位置，留空自动使用 data/workspaces/group_logs。",
