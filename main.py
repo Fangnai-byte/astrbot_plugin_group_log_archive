@@ -15,6 +15,8 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import time
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -42,6 +44,8 @@ CHAT_RE = re.compile(
 LINE_TS_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) \d{2}:\d{2}:\d{2}")
 GROUP_ID_RE = re.compile(r"pre-config:GroupMessage:(\d+)")
 QQ_ID_RE = re.compile(r"\((\d{6,12})\)")
+IMAGE_MARKER_RE = re.compile(r"\[Image\]|\[图片\]")
+MSG_TS_RE = re.compile(r"\[([^\]]+)/(\d{2}:\d{2}:\d{2})\]:")
 
 
 class GroupLogArchive(Star):
@@ -179,6 +183,7 @@ class GroupLogArchive(Star):
                         continue
                     target = self._route_line(text, fallback_date)
                     text = self._sanitize(text)
+                    text = self._annotate_image(text)
                     with open(target, "a", encoding="utf-8") as out:
                         out.write(text + "\n")
                     exported += len(line) + 1
@@ -189,6 +194,7 @@ class GroupLogArchive(Star):
                 if self._is_chat_line(text):
                     target = self._route_line(text, fallback_date)
                     text = self._sanitize(text)
+                    text = self._annotate_image(text)
                     with open(target, "a", encoding="utf-8") as out:
                         out.write(text + "\n")
                     exported += len(buf)
@@ -241,6 +247,79 @@ class GroupLogArchive(Star):
             except OSError as e:
                 logger.warning(f"[GroupLogArchive] 清理 {path} 失败: {e}")
 
+    # ---------------- 图片功能 ----------------
+    def _find_image_for(self, msg_time: str, out_dir: str) -> str | None:
+        """按消息时间在 data/temp 找最近的图片，复制到 out_dir/tu/，返回相对路径"""
+        try:
+            ts = datetime.strptime(msg_time, "%H:%M:%S")
+        except ValueError:
+            return None
+        temp_dir = os.path.join(get_astrbot_data_path(), "temp")
+        if not os.path.isdir(temp_dir):
+            return None
+        best, best_delta = None, 30  # 30 秒内匹配
+        target = ts.hour * 3600 + ts.minute * 60 + ts.second
+        for fn in os.listdir(temp_dir):
+            if not fn.startswith("compressed_") or not fn.endswith(
+                (".jpg", ".jpeg", ".png", ".gif")
+            ):
+                continue
+            fp = os.path.join(temp_dir, fn)
+            try:
+                mt = datetime.fromtimestamp(os.path.getmtime(fp))
+            except OSError:
+                continue
+            delta = abs(
+                (mt.hour * 3600 + mt.minute * 60 + mt.second) - target
+            )
+            if delta < best_delta:
+                best_delta, best = delta, fp
+        if not best:
+            return None
+        tu_dir = os.path.join(out_dir, "tu")
+        os.makedirs(tu_dir, exist_ok=True)
+        dest = os.path.join(tu_dir, os.path.basename(best))
+        try:
+            shutil.copy2(best, dest)
+            return os.path.join("tu", os.path.basename(best))
+        except OSError:
+            return None
+
+    def _annotate_image(self, text: str) -> str:
+        """若消息含图片标记，尝试找到图片并追加路径标注"""
+        if not self.config.get("track_images", False):
+            return text
+        if not IMAGE_MARKER_RE.search(text):
+            return text
+        m = MSG_TS_RE.search(text)
+        if not m:
+            return text
+        rel = self._find_image_for(m.group(2), self._out_dir())
+        if rel:
+            text = text.rstrip("\n") + f" [图:{rel}]\n"
+        return text
+
+    def _cleanup_images(self) -> None:
+        """按保留天数清理 out_dir/tu/ 下的图片"""
+        if not self.config.get("cleanup_images", False):
+            return
+        days = max(int(self.config.get("image_retention_days", 7)), 1)
+        tu_dir = os.path.join(self._out_dir(), "tu")
+        if not os.path.isdir(tu_dir):
+            return
+        cutoff = time.time() - days * 86400
+        removed = 0
+        for fn in os.listdir(tu_dir):
+            fp = os.path.join(tu_dir, fn)
+            try:
+                if os.path.getmtime(fp) < cutoff:
+                    os.remove(fp)
+                    removed += 1
+            except OSError:
+                continue
+        if removed:
+            logger.info(f"[GroupLogArchive] 清理过期图片 {removed} 个")
+
     # ---------------- 定时任务 ----------------
     async def _tick(self) -> None:
         try:
@@ -250,6 +329,7 @@ class GroupLogArchive(Star):
                     logger.info(f"[GroupLogArchive] 增量导出 {n} 字节")
                 if self.config.get("clean_source", True):
                     await asyncio.to_thread(self._clean_source)
+                await asyncio.to_thread(self._cleanup_images)
         except Exception as e:
             logger.error(f"[GroupLogArchive] 导出任务异常: {e}")
 
