@@ -183,6 +183,8 @@ class GroupLogArchive(Star):
 
     def _sanitize(self, text: str) -> str:
         """按配置对日志行做脱敏处理"""
+        # 规范化 AstrBot 偶发的双平台前缀（显示瑕疵，不影响群号提取）
+        text = text.replace("pre-config:pre-config:", "pre-config:")
         if self.config.get("mask_group_id", False):
             text = GROUP_ID_RE.sub(
                 lambda m: f"pre-config:GroupMessage:{self._mask_id(m.group(1))}", text
