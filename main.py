@@ -367,8 +367,8 @@ class GroupLogArchive(Star):
                 logger.warning(f"[GroupLogArchive] 清理 {path} 失败: {e}")
 
     # ---------------- 图片功能 ----------------
-    def _find_image_for(self, msg_time: str, out_dir: str) -> str | None:
-        """按消息时间在 data/temp 找最近的图片，复制到 out_dir/tu/，返回相对路径"""
+    def _find_image_for(self, msg_time: str, out_dir: str, gid: str = "unknown") -> str | None:
+        """按消息时间在 data/temp 找最近的图片，复制到 out_dir/tu/<群>/，返回相对路径"""
         try:
             ts = datetime.strptime(msg_time, "%H:%M:%S")
         except ValueError:
@@ -395,12 +395,12 @@ class GroupLogArchive(Star):
                 best_delta, best = delta, fp
         if not best:
             return None
-        tu_dir = os.path.join(out_dir, "tu")
+        tu_dir = os.path.join(out_dir, "tu", gid)
         os.makedirs(tu_dir, exist_ok=True)
         dest = os.path.join(tu_dir, os.path.basename(best))
         try:
             shutil.copy2(best, dest)
-            return os.path.join("tu", os.path.basename(best))
+            return os.path.join("tu", gid, os.path.basename(best))
         except OSError:
             return None
 
@@ -413,7 +413,11 @@ class GroupLogArchive(Star):
         m = MSG_TS_RE.search(text)
         if not m:
             return text
-        rel = self._find_image_for(m.group(2), self._out_dir())
+        gm = GROUP_ID_RE.search(text)
+        gid = gm.group(1) if gm else "unknown"
+        if self.config.get("mask_group_id", False) and gid != "unknown":
+            gid = self._mask_id(gid)
+        rel = self._find_image_for(m.group(2), self._out_dir(), gid)
         if rel:
             text = text.rstrip("\n") + f" [图:{rel}]\n"
         return text
@@ -428,14 +432,15 @@ class GroupLogArchive(Star):
             return
         cutoff = time.time() - days * 86400
         removed = 0
-        for fn in os.listdir(tu_dir):
-            fp = os.path.join(tu_dir, fn)
-            try:
-                if os.path.getmtime(fp) < cutoff:
-                    os.remove(fp)
-                    removed += 1
-            except OSError:
-                continue
+        for root, dirs, files in os.walk(tu_dir):
+            for fn in files:
+                fp = os.path.join(root, fn)
+                try:
+                    if os.path.getmtime(fp) < cutoff:
+                        os.remove(fp)
+                        removed += 1
+                except OSError:
+                    continue
         if removed:
             logger.info(f"[GroupLogArchive] 清理过期图片 {removed} 个")
 
@@ -771,7 +776,7 @@ class GroupLogArchive(Star):
                 out_group = self._mask_id(group_id)
 
             out_dir = self._out_dir()
-            tu_dir = os.path.join(out_dir, "tu")
+            tu_dir = os.path.join(out_dir, "tu", out_group)  # 按群分目录
             os.makedirs(tu_dir, exist_ok=True)
             saved = []
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
@@ -790,15 +795,15 @@ class GroupLogArchive(Star):
                             if r.status_code == 200 and r.content:
                                 with open(dest, "wb") as f:
                                     f.write(r.content)
-                                saved.append(f"tu/{fname}")
+                                saved.append(f"tu/{out_group}/{fname}")
                         elif src.startswith("file://"):
                             p = src[len("file://"):]
                             if os.path.exists(p):
                                 shutil.copy2(p, dest)
-                                saved.append(f"tu/{fname}")
+                                saved.append(f"tu/{out_group}/{fname}")
                         elif img.path and os.path.exists(img.path):
                             shutil.copy2(img.path, dest)
-                            saved.append(f"tu/{fname}")
+                            saved.append(f"tu/{out_group}/{fname}")
                     except Exception as e:
                         logger.debug(f"[GroupLogArchive] 单张图片保存失败: {e}")
             if saved:
