@@ -120,6 +120,9 @@ A：检查插件配置里 `track_images` 是否开启；开启后图片实时保
 **Q：AI 命名没生效？**
 A：确认 `image_caption` 已开启、`image_caption_provider` 指向支持识图的模型（留空自动选视觉模型）。命名是后台异步的，稍等片刻；失败会自动保持原名。注意会消耗模型 API token。
 
+**Q：归档日志一直在重复？**
+A：一般是**旧版导出脚本（`export_group_logs.py`）和插件同时在跑**，共用状态文件互相覆盖导致重复导出。插件启动时会自动检测旧脚本进程并警告（`pgrep -f export_group_logs.py` 可手动确认），停掉旧脚本、只保留插件即可。如果已重复，删除 `.export_state.json` 并清掉重复的归档文件后重来。
+
 **Q：归档文件在哪？**
 A：默认 `data/workspaces/group_logs/`，群里发 `/log_archive status` 可直接查看实际路径和文件列表。
 
