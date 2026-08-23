@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 
 import httpx
@@ -224,31 +225,63 @@ class GroupLogArchive(Star):
             return False
 
     def _check_legacy_script(self) -> None:
-        """检测旧版导出脚本 export_group_logs.py 是否在运行（与插件共用状态文件会冲突导致重复导出）"""
+        """检测旧版导出脚本 export_group_logs.py 是否在运行（与插件共用状态文件会冲突导致重复导出）。
+
+        跨平台：Linux/macOS 用 pgrep + /proc；Windows 用 PowerShell 枚举进程命令行。
+        """
         try:
             pids = []
-            r = subprocess.run(
-                ["pgrep", "-f", "export_group_logs.py"],
-                capture_output=True, text=True, timeout=10,
-            )
-            if r.returncode == 0 and r.stdout.strip():
-                pids = [p for p in r.stdout.split() if p.isdigit()]
-            # 兜底扫 /proc
-            if not pids:
+            if sys.platform.startswith("win"):
                 try:
-                    for pid in os.listdir("/proc"):
-                        if not pid.isdigit():
-                            continue
-                        try:
-                            cmdline = open(
-                                f"/proc/{pid}/cmdline", "rb"
-                            ).read().decode(errors="replace")
-                            if "export_group_logs.py" in cmdline:
-                                pids.append(pid)
-                        except OSError:
-                            continue
-                except OSError:
-                    pass
+                    ps = (
+                        "Get-CimInstance Win32_Process | "
+                        "Where-Object { $_.CommandLine -like '*export_group_logs*' } | "
+                        "Select-Object -ExpandProperty ProcessId"
+                    )
+                    r = subprocess.run(
+                        ["powershell", "-NoProfile", "-Command", ps],
+                        capture_output=True, text=True, timeout=20,
+                    )
+                    if r.returncode == 0:
+                        pids = [p.strip() for p in r.stdout.split() if p.strip().isdigit()]
+                except Exception:
+                    # 尝试 wmic 兜底
+                    try:
+                        r = subprocess.run(
+                            ["wmic", "process", "get", "processid,commandline"],
+                            capture_output=True, text=True, timeout=20,
+                        )
+                        if r.returncode == 0:
+                            for line in r.stdout.splitlines():
+                                if "export_group_logs.py" in line:
+                                    parts = line.strip().split()
+                                    if parts and parts[-1].isdigit():
+                                        pids.append(parts[-1])
+                    except Exception:
+                        pass
+            else:
+                r = subprocess.run(
+                    ["pgrep", "-f", "export_group_logs.py"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if r.returncode == 0 and r.stdout.strip():
+                    pids = [p for p in r.stdout.split() if p.isdigit()]
+                # 兜底扫 /proc
+                if not pids:
+                    try:
+                        for pid in os.listdir("/proc"):
+                            if not pid.isdigit():
+                                continue
+                            try:
+                                cmdline = open(
+                                    f"/proc/{pid}/cmdline", "rb"
+                                ).read().decode(errors="replace")
+                                if "export_group_logs.py" in cmdline:
+                                    pids.append(pid)
+                            except OSError:
+                                continue
+                    except OSError:
+                        pass
             if pids:
                 logger.warning(
                     f"[GroupLogArchive] 检测到旧版导出脚本 export_group_logs.py "
