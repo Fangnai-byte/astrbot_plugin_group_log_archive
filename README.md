@@ -94,6 +94,7 @@
 - xiaomi/mimo 系推理模型直连 API 并读取推理内容；其他模型走 AstrBot 标准 LLM 接口
 - 命名在**后台异步**进行，不影响消息收发与处理；失败时自动保持原名
 - 注意：需要模型支持图片识别，且会消耗 API token
+- 隐私说明：xiaomi/mimo 系模型直连时，插件会读取本机 `cmd_config.json` 中的该模型 API Key 用于直接调用（**仅本机使用，不外传、不转发**）；介意可关闭 `image_caption` 或改用其他 provider
 
 ## 归档格式
 
