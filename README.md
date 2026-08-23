@@ -177,6 +177,15 @@ A：默认 `data/workspaces/group_logs/`，群里发 `/log_archive status` 可�
 - 检查配置 `track_images` / `image_caption` 是否开启。
 - AI 命名需要支持识图的模型（`image_caption_provider` 留空自动选视觉模型），且会消耗 API token；命名是后台异步的，稍等片刻，失败自动保持原名。
 
+### 症状：归档里只有管理员/被 @ 的消息，普通成员消息缺失
+
+- 一般是 **AstrBot 的消息过滤/唤醒配置**导致只有部分消息进入处理管道，从而没有 `group_chat_context` 记录。
+- 检查 AstrBot 设置项：
+  - `empty_mention_waiting`（空 @ 等待）：开启后可能只处理 @ 机器人的消息
+  - `enable_id_white_list` / `id_whitelist`（白名单模式）
+  - 其他唤醒/过滤相关配置
+- 确认已开启 DEBUG + 文件日志；插件自身不会过滤消息来源（宁宁侧测试各成员消息均正常归档）。
+
 ### 其他
 
 - 归档路径、状态查询：群内管理员发送 `/log_archive status`（仅管理员可用）。
