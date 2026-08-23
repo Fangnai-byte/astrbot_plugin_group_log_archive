@@ -187,7 +187,7 @@ class GroupLogArchive(Star):
         text = text.replace("pre-config:pre-config:", "pre-config:")
         if self.config.get("mask_group_id", False):
             text = GROUP_ID_RE.sub(
-                lambda m: f"pre-config:GroupMessage:{self._mask_id(m.group(1))}", text
+                lambda m: f"GroupMessage:{self._mask_id(m.group(1))}", text
             )
         if self.config.get("mask_qq_id", False):
             # QQ 号常出现在引用的括号中，如 (10001)
