@@ -43,13 +43,14 @@ except ImportError:  # 兼容旧版本 AstrBot
 # 注意：不能用裸 "group_chat_context" 子串，因为 LLM 请求日志里也会出现该字样。
 # event_bus 行([core.event_bus:74])与 group_chat_context 行记录同一条消息，
 # 保留会导致重复，因此只匹配 group_chat_context 行。
+# 兼容新旧 AstrBot：平台标识可能是 pre-config（旧）或账号名（新，如 账号1）
 CHAT_RE = re.compile(
     r"^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\] "
     r"\[Plug\] \[DBUG\] \[astrbot\.group_chat_context:\d+\]: "
-    r"group_chat_context \| pre-config:GroupMessage:\d+ \| \["
+    r"group_chat_context \| [^|]+:GroupMessage:\d+ \| \["
 )
 LINE_TS_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) \d{2}:\d{2}:\d{2}")
-GROUP_ID_RE = re.compile(r"pre-config:GroupMessage:(\d+)")
+GROUP_ID_RE = re.compile(r"GroupMessage:(\d+)")
 QQ_ID_RE = re.compile(r"\((\d{6,12})\)")
 QQ_SLASH_RE = re.compile(r"/(\d{6,12})[:：]")
 IMAGE_MARKER_RE = re.compile(r"\[Image\]|\[图片\]")
