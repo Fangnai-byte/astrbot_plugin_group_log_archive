@@ -139,6 +139,49 @@ A：默认 `data/workspaces/group_logs/`，群里发 `/log_archive status` 可�
   纯图片/文件/表情消息不会进入 group_chat_context 日志，因此插件通过 AstrBot 事件
   系统实时拦截保存，保证不漏图。
 
+## 故障排查（AI/Bot 指引）
+
+> 此部分面向 AI 助手/Bot，可照着步骤执行，帮用户排查常见问题。
+
+### 症状：归档日志一直重复、没有新内容
+
+1. **确认是否多导出源并存**（最常见原因）：
+   ```
+   pgrep -f "export_group_logs.py"
+   ```
+   如果有输出（存在旧版导出脚本进程），执行 `kill <PID>` 停掉它，只保留本插件作为唯一导出源。旧脚本与本插件共用 `.export_state.json`，互相覆盖 offset 导致重复导出。
+
+2. **确认插件唯一实例**：查看插件是否被重复加载（AstrBot 插件管理里只应有一个 Group Log Archive）。
+
+3. **检查状态文件是否正常**：
+   ```
+   cat <output_dir>/.export_state.json
+   ```
+   正常情况 `offset` 应持续增长；若反复归零/变小，说明存在竞争写入者。
+
+4. **清理已重复的数据**：
+   - 删除 `.export_state.json`（让插件重新开始，会丢失断点，但不会重复）
+   - 删除归档目录下重复内容的日志文件
+   - 重启 AstrBot 或重载插件
+
+5. **验证**：等待一个导出周期（60 秒），检查归档文件新内容是否只有一份；重复的行不再出现即为解决。
+
+### 症状：归档文件是 `astrbot_unknown_日期.log`
+
+- 说明走的是 **event_bus 兼容模式**（日志级别或文件日志未配置到位），该模式无群号信息、无法分群。
+- 解决：开启 DEBUG + 文件日志（可配置 `auto_enable_debug` 自动修改并重启），插件会自动切换到 `group_chat_context` 模式按群分文件。
+- 若已开 DEBUG 仍 unknown：确认插件版本 ≥ 1.4.3（旧版不兼容新版 AstrBot 的 `账号名:GroupMessage:群号` 格式）。
+
+### 症状：图片没有保存 / AI 命名没生效
+
+- 检查配置 `track_images` / `image_caption` 是否开启。
+- AI 命名需要支持识图的模型（`image_caption_provider` 留空自动选视觉模型），且会消耗 API token；命名是后台异步的，稍等片刻，失败自动保持原名。
+
+### 其他
+
+- 归档路径、状态查询：群内管理员发送 `/log_archive status`（仅管理员可用）。
+- 日志清理：配置 `log_cleanup`（如 `3day/00:00:00:000`）可自动清理过期归档。
+
 ## 更新日志
 
 详见 [CHANGELOG.md](CHANGELOG.md)。
