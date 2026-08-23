@@ -27,6 +27,21 @@
 
 将本插件目录放入 AstrBot 的 `data/plugins/` 下，然后在 WebUI 的插件市场/管理页启用即可。
 
+## 快速开始（新手必看）
+
+1. **安装插件**：下载 Release 页的 zip 解压后放入 `data/plugins/`，或在 WebUI 插件管理 → 从 Git 仓库安装：`https://github.com/Fangnai-byte/astrbot_plugin_group_log_archive`，然后启用。
+2. **开启日志（关键，否则没有数据）**：
+   - 插件配置里打开 `auto_enable_debug`（自动修改 AstrBot 配置），或手动开启 `log_file_enable=true` + `log_level=DEBUG`；
+   - **重启 AstrBot** 生效。
+3. **按需配置**（插件配置页）：
+   - `track_images`：图片自动保存到 `tu/`；
+   - `image_caption`：AI 给图片命名（需支持识图的模型，会消耗 token）；
+   - `mask_group_id` / `mask_qq_id`：群号/QQ 号脱敏；
+   - `log_cleanup`：如 `7day/04:30` 定时清理过期日志；
+   - `cron_expression`：如 `12:00` 指定每天定时导出。
+4. **开始使用**：管理员在群里发送 `/log_archive status` 可查看归档路径与文件列表；归档文件默认在 `data/workspaces/group_logs/`。
+5. **遇到问题**：阅读下方「常见问题」和「故障排查（AI/Bot 指引）」。
+
 ## 文件保存在哪里
 
 - **默认归档目录**：`<AstrBot根目录>/data/workspaces/group_logs/`
