@@ -29,7 +29,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from astrbot.api import logger, AstrBotConfig
 from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.api.event.filter import EventMessageType
+from astrbot.api.event.filter import EventMessageType, PermissionType
 from astrbot.api.star import Context, Star
 from astrbot.core.message.components import Image
 
@@ -795,6 +795,7 @@ class GroupLogArchive(Star):
 
     # ---------------- 指令 ----------------
     @filter.command("log_archive")
+    @filter.permission_type(PermissionType.ADMIN)
     async def log_archive(self, event: AstrMessageEvent):
         args = (event.message_str or "").split()
         sub = args[1].strip().lower() if len(args) > 1 else "status"
