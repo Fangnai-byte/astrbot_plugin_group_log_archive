@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import time
 
 import httpx
@@ -221,6 +222,41 @@ class GroupLogArchive(Star):
         except Exception as e:
             logger.warning(f"[GroupLogArchive] 自动开启 DEBUG 失败: {e}")
             return False
+
+    def _check_legacy_script(self) -> None:
+        """检测旧版导出脚本 export_group_logs.py 是否在运行（与插件共用状态文件会冲突导致重复导出）"""
+        try:
+            pids = []
+            r = subprocess.run(
+                ["pgrep", "-f", "export_group_logs.py"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                pids = [p for p in r.stdout.split() if p.isdigit()]
+            # 兜底扫 /proc
+            if not pids:
+                try:
+                    for pid in os.listdir("/proc"):
+                        if not pid.isdigit():
+                            continue
+                        try:
+                            cmdline = open(
+                                f"/proc/{pid}/cmdline", "rb"
+                            ).read().decode(errors="replace")
+                            if "export_group_logs.py" in cmdline:
+                                pids.append(pid)
+                        except OSError:
+                            continue
+                except OSError:
+                    pass
+            if pids:
+                logger.warning(
+                    f"[GroupLogArchive] 检测到旧版导出脚本 export_group_logs.py "
+                    f"正在运行 (PID: {', '.join(pids)})！它会与插件共用状态文件，"
+                    f"导致日志重复导出。请停止该脚本，只保留插件作为导出源。"
+                )
+        except Exception as e:
+            logger.debug(f"[GroupLogArchive] 旧脚本检测失败: {e}")
 
     # ---------------- 增量导出 ----------------
     def _export_file(self, path: str, state_key: str) -> int:
@@ -627,6 +663,7 @@ class GroupLogArchive(Star):
     # ---------------- 生命周期 ----------------
     async def initialize(self) -> None:
         await asyncio.to_thread(self._detect_chat_source)
+        await asyncio.to_thread(self._check_legacy_script)
         cron_expr = str(self.config.get("cron_expression", "") or "").strip()
         # 支持简单时间格式 HH:MM（如 12:00 = 每天中午12点）
         m = re.match(r"^(\d{1,2}):(\d{2})$", cron_expr)
