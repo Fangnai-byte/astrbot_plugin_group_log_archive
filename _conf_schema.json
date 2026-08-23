@@ -29,6 +29,12 @@
     "type": "text",
     "default": "auto"
   },
+  "group_whitelist": {
+    "description": "群白名单（仅归档这些群）",
+    "hint": "填群号，如 748791823。留空=归档所有群；填写后只归档列表中的群，其他群的消息与图片一律不记录。",
+    "type": "list",
+    "default": []
+  },
   "auto_enable_debug": {
     "description": "自动开启 DEBUG 日志",
     "hint": "开启后，检测到未开启 DEBUG 时自动修改 AstrBot 配置（log_level=DEBUG + 文件日志），提示重启后生效。",
