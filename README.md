@@ -145,6 +145,7 @@ A：默认 `data/workspaces/group_logs/`，群里发 `/log_archive status` 可�
 - 支持 Windows / Linux / macOS；Android proot 等不支持 `rename` 的文件系统亦可运行
   （状态文件保存有降级路径）
 - 支持日志轮转文件（`astrbot.log.1/.2/...`），全部导出后删除
+- 兼容新旧版 AstrBot 日志格式：旧版 `pre-config:GroupMessage:群号` 与新版（4.27+）`账号名:GroupMessage:群号` 均可识别分群
 
 ## License
 
