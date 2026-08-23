@@ -293,6 +293,13 @@ class GroupLogArchive(Star):
         except Exception as e:
             logger.debug(f"[GroupLogArchive] 旧脚本检测失败: {e}")
 
+    def _is_group_allowed(self, gid: str) -> bool:
+        """群白名单判断：配置非空时，仅白名单中的群归档"""
+        wl = self.config.get("group_whitelist", []) or []
+        if not wl:
+            return True
+        return str(gid) in [str(x) for x in wl]
+
     # ---------------- 增量导出 ----------------
     def _export_file(self, path: str, state_key: str) -> int:
         """增量导出单个日志文件，返回写入归档的字节数"""
@@ -335,6 +342,10 @@ class GroupLogArchive(Star):
                     text = line.decode("utf-8", errors="replace")
                     if not self._is_chat_line(text):
                         continue
+                    _gm = GROUP_ID_RE.search(text)
+                    _gid = _gm.group(1) if _gm else "unknown"
+                    if not self._is_group_allowed(_gid):
+                        continue
                     target = self._route_line(text, fallback_date)
                     text = self._sanitize(text)
                     text = self._annotate_image(text)
@@ -346,9 +357,12 @@ class GroupLogArchive(Star):
                 read_pos += len(buf)
                 text = buf.decode("utf-8", errors="replace")
                 if self._is_chat_line(text):
-                    target = self._route_line(text, fallback_date)
-                    text = self._sanitize(text)
-                    text = self._annotate_image(text)
+                    _gm2 = GROUP_ID_RE.search(text)
+                    _gid2 = _gm2.group(1) if _gm2 else "unknown"
+                    if self._is_group_allowed(_gid2):
+                        target = self._route_line(text, fallback_date)
+                        text = self._sanitize(text)
+                        text = self._annotate_image(text)
                     with open(target, "a", encoding="utf-8") as out:
                         out.write(text + "\n")
                     exported += len(buf)
@@ -798,6 +812,8 @@ class GroupLogArchive(Star):
             if not images:
                 return
             group_id = str(event.get_group_id() or "unknown")
+            if not self._is_group_allowed(group_id):
+                return
             _sender = getattr(event.message_obj, "sender", None)
             nickname = (
                 str(getattr(_sender, "nickname", "") or "")
