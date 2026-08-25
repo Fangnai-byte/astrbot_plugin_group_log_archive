@@ -1,5 +1,10 @@
 # 更新日志
 
+## [1.5.0] - 2026-08-25
+
+### 新增
+- **RawMessage 日志源**：auto 检测优先级调整为 `group_chat_context` > `rawmessage` > `event_bus`。开启 DEBUG 但 GC 行因管线过滤不生成时，自动改用 RawMessage 行（含群号/昵称/内容），**无需调整 empty_mention_waiting 即可按群分文件**
+
 ## [1.4.8] - 2026-08-23
 
 ### 新增
