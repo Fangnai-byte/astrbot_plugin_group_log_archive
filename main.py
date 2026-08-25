@@ -397,6 +397,18 @@ class GroupLogArchive(Star):
             return True
         return str(gid) in [str(x) for x in wl]
 
+    def _save_plugin_config(self) -> None:
+        """把当前 self.config 写回插件配置文件（指令修改配置时用）"""
+        try:
+            cfg_path = os.path.join(
+                get_astrbot_data_path(), "config",
+                "astrbot_plugin_group_log_archive_config.json",
+            )
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                json.dump(self.config, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning(f"[GroupLogArchive] 保存插件配置失败: {e}")
+
     # ---------------- 增量导出 ----------------
     def _export_file(self, path: str, state_key: str) -> int:
         """增量导出单个日志文件，返回写入归档的字节数"""
@@ -1057,7 +1069,35 @@ class GroupLogArchive(Star):
                 "/log_archive status - 查看状态\n"
                 "/log_archive now - 立即导出一轮\n"
                 "/log_archive clean - 手动清空源日志\n"
+                "/log_archive whitelist add <群号> - 加入白名单\n"
+                "/log_archive whitelist remove <群号> - 移出白名单\n"
+                "/log_archive whitelist list - 查看白名单\n"
                 "/log_archive help - 显示帮助"
+            )
+            return
+
+        if sub == "whitelist" and len(args) >= 2:
+            action = args[2].strip().lower() if len(args) > 2 else "list"
+            wl = list(self.config.get("group_whitelist", []) or [])
+            if action == "add" and len(args) >= 4:
+                gid = args[3].strip()
+                if gid.isdigit() and gid not in [str(x) for x in wl]:
+                    wl.append(gid)
+                    self.config["group_whitelist"] = wl
+                    self._save_plugin_config()
+                    yield event.plain_result(f"已加入白名单：{gid}")
+                else:
+                    yield event.plain_result("群号无效或已在白名单")
+                return
+            if action == "remove" and len(args) >= 4:
+                gid = args[3].strip()
+                wl = [str(x) for x in wl if str(x) != gid]
+                self.config["group_whitelist"] = wl
+                self._save_plugin_config()
+                yield event.plain_result(f"已移出白名单：{gid}")
+                return
+            yield event.plain_result(
+                "当前白名单：" + ("、".join(str(x) for x in wl) if wl else "空（全部群归档）")
             )
             return
 
