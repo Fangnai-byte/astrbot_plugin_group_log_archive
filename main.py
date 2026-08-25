@@ -992,6 +992,57 @@ class GroupLogArchive(Star):
         except Exception as e:
             logger.error(f"[GroupLogArchive] 图片事件处理失败: {e}")
 
+    # ---------------- bot 发送消息记录 ----------------
+    @filter.after_message_sent()
+    async def on_bot_message_sent(self, event: AstrMessageEvent):
+        """记录 bot 自己发送的群消息（统计发言量）"""
+        if not self.config.get("record_bot_messages", False):
+            return
+        try:
+            result = event.get_result()
+            if not result or not getattr(result, "chain", None):
+                return
+            gid = str(event.get_group_id() or "")
+            if not gid or not self._is_group_allowed(gid):
+                return
+            # 组件链转文本
+            parts = []
+            for comp in result.chain or []:
+                ctype = str(getattr(comp, "type", "")).replace("ComponentType.", "")
+                if ctype == "Plain":
+                    parts.append(str(getattr(comp, "text", "")))
+                elif ctype == "Image":
+                    parts.append("[图片]")
+                elif ctype == "Face":
+                    parts.append("[表情]")
+                elif ctype == "At":
+                    parts.append(f"[At:{getattr(comp, 'qq', '')}]")
+                elif ctype in ("Reply", "Record", "Video", "File"):
+                    parts.append(f"[{ctype}]")
+                else:
+                    parts.append(f"[{ctype}]")
+            text = " ".join(p for p in parts if p)
+            if not text:
+                return
+            now = datetime.now()
+            out_group = gid
+            if self.config.get("mask_group_id", False):
+                out_group = self._mask_id(gid)
+            line = (
+                f"[{now.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] [Plug] [INFO] "
+                f"[astrbot.group_log_archive]: group_chat_context | "
+                f"pre-config:GroupMessage:{out_group} | "
+                f"[bot/{now.strftime('%H:%M:%S')}]: {text}\n"
+            )
+            out_dir = self._out_dir()
+            log_path = os.path.join(
+                out_dir, f"astrbot_{out_group}_{now.strftime('%Y-%m-%d')}.log"
+            )
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(line)
+        except Exception as e:
+            logger.debug(f"[GroupLogArchive] bot消息记录失败: {e}")
+
     # ---------------- 指令 ----------------
     @filter.command("log_archive")
     @filter.permission_type(PermissionType.ADMIN)
