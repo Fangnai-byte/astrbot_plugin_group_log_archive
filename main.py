@@ -34,7 +34,7 @@ from astrbot.api import logger, AstrBotConfig
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.event.filter import EventMessageType, PermissionType
 from astrbot.api.star import Context, Star
-from astrbot.core.message.components import Image
+from astrbot.core.message.components import At, Face, Image, Plain, Reply
 
 try:
     from astrbot.core.utils.astrbot_path import get_astrbot_data_path
@@ -1008,20 +1008,21 @@ class GroupLogArchive(Star):
             # 组件链转文本
             parts = []
             for comp in result.chain or []:
-                ctype = str(getattr(comp, "type", "")).replace("ComponentType.", "")
-                if ctype == "Plain":
+                if isinstance(comp, Plain):
                     parts.append(str(getattr(comp, "text", "")))
-                elif ctype == "Image":
+                elif isinstance(comp, Image):
                     parts.append("[图片]")
-                elif ctype == "Face":
+                elif isinstance(comp, Face):
                     parts.append("[表情]")
-                elif ctype == "At":
+                elif isinstance(comp, At):
                     parts.append(f"[At:{getattr(comp, 'qq', '')}]")
-                elif ctype in ("Reply", "Record", "Video", "File"):
-                    parts.append(f"[{ctype}]")
+                elif isinstance(comp, Reply):
+                    parts.append("[回复]")
                 else:
+                    ctype = str(getattr(comp, "type", "")).replace("ComponentType.", "")
                     parts.append(f"[{ctype}]")
             text = " ".join(p for p in parts if p)
+            text = text.replace("\n", " ").strip()
             if not text:
                 return
             now = datetime.now()
