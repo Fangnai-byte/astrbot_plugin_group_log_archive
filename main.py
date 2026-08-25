@@ -11,6 +11,7 @@ Group Log Archive - AstrBot 群聊日志归档插件
       group_chat_context | pre-config:GroupMessage:<群号> | [<昵称>/<时间>]: <内容>
 """
 import asyncio
+import ast
 import base64
 import hashlib
 import io
@@ -140,9 +141,9 @@ class GroupLogArchive(Star):
             if not m:
                 return False
             try:
-                d = json.loads(m.group(1))
+                d = ast.literal_eval(m.group(1))
                 return d.get("message_type") == "group"
-            except (json.JSONDecodeError, ValueError):
+            except (ValueError, SyntaxError):
                 return False
         return bool(CHAT_RE.match(line))
 
@@ -360,8 +361,8 @@ class GroupLogArchive(Star):
         if not m:
             return None
         try:
-            d = json.loads(m.group(1))
-        except (json.JSONDecodeError, ValueError):
+            d = ast.literal_eval(m.group(1))  # RawMessage 是 Python repr（单引号），非 JSON
+        except (ValueError, SyntaxError):
             return None
         if d.get("message_type") != "group":
             return None
