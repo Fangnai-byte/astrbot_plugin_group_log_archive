@@ -25,7 +25,7 @@
   },
   "log_source": {
     "description": "聊天记录日志源",
-    "hint": "auto=自动检测；group_chat_context=需开启DEBUG（信息最全，含群号）；event_bus=INFO级别即可（未开DEBUG时自动使用，但无法分群）。",
+    "hint": "auto=自动检测（GC→RawMessage→event_bus）；group_chat_context=需开DEBUG且消息进管线；rawmessage=开DEBUG即可（含群号，绕过管线过滤）；event_bus=INFO即可（无群号）。",
     "type": "text",
     "default": "auto"
   },
