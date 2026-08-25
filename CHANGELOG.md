@@ -1,5 +1,10 @@
 # 更新日志
 
+## [1.5.1] - 2026-08-25
+
+### 修复
+- RawMessage 解析改用 `ast.literal_eval`（源日志为 Python 单引号 repr，非标准 JSON），修复 rawmessage 模式识别失败问题
+
 ## [1.5.0] - 2026-08-25
 
 ### 新增
