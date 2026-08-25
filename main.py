@@ -49,7 +49,7 @@ except ImportError:  # 兼容旧版本 AstrBot
 # 兼容新旧 AstrBot：平台标识可能是 pre-config（旧）或账号名（新，如 账号1）
 CHAT_RE = re.compile(
     r"^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\] "
-    r"\[Plug\] \[DBUG\] \[astrbot\.group_chat_context:\d+\]: "
+    r"\[(?:Plug|Core)\] \[DBUG\] \[astrbot\.group_chat_context:\d+\]: "
     r"group_chat_context \| [^|]+:GroupMessage:\d+ \| \["
 )
 LINE_TS_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) \d{2}:\d{2}:\d{2}")
