@@ -106,5 +106,11 @@
     "hint": "留空自动使用默认模型。需支持图片识别（如 xiaomi/mimo-v2.5）。",
     "type": "text",
     "default": ""
+  },
+  "record_bot_messages": {
+    "description": "记录 bot 自己的发言",
+    "hint": "开启后 bot 发送的群消息也会记入归档（昵称显示为 bot），方便统计发言量。",
+    "type": "bool",
+    "default": false
   }
 }
