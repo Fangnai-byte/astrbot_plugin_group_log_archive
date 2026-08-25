@@ -390,7 +390,7 @@ class GroupLogArchive(Star):
             f"[{nickname}/{time_str}]: {content_text}"
         )
 
-
+    def _is_group_allowed(self, gid: str) -> bool:
         """群白名单判断：配置非空时，仅白名单中的群归档"""
         wl = self.config.get("group_whitelist", []) or []
         if not wl:
