@@ -56,6 +56,13 @@ GROUP_ID_RE = re.compile(r"GroupMessage:(\d+)")
 QQ_ID_RE = re.compile(r"\((\d{6,12})\)")
 QQ_SLASH_RE = re.compile(r"/(\d{6,12})[:：]")
 IMAGE_MARKER_RE = re.compile(r"\[Image\]|\[图片\]")
+# RawMessage 行（DBUG 级，含完整群号/昵称/内容，不受管线过滤影响）：
+# [时间] [Core] [DBUG] [aiocqhttp.aiocqhttp_platform_adapter:129]: [aiocqhttp] RawMessage <Event, {...}>
+RAW_MESSAGE_RE = re.compile(
+    r"^\[(?:\d{4}-\d{2}-\d{2} )?\d{2}:\d{2}:\d{2}\.\d+\] "
+    r"\[Core\] \[DBUG\] \[aiocqhttp\.aiocqhttp_platform_adapter:\d+\]: "
+    r"\[aiocqhttp\] RawMessage <Event, (\{.*\})>$"
+)
 # event_bus 行（INFO 级别，兼容未开 DEBUG 的环境）：
 # [时间] [Core] [INFO] [core.event_bus:74]: [default] [账号(aiocqhttp)] 昵称/QQ: 内容
 EVENT_BUS_RE = re.compile(
@@ -128,6 +135,15 @@ class GroupLogArchive(Star):
             return True
         if self._chat_source == "event_bus":
             return bool(EVENT_BUS_RE.match(line))
+        if self._chat_source == "rawmessage":
+            m = RAW_MESSAGE_RE.match(line)
+            if not m:
+                return False
+            try:
+                d = json.loads(m.group(1))
+                return d.get("message_type") == "group"
+            except (json.JSONDecodeError, ValueError):
+                return False
         return bool(CHAT_RE.match(line))
 
     def _detect_chat_source(self) -> None:
@@ -156,12 +172,26 @@ class GroupLogArchive(Star):
             logger.debug(f"[GroupLogArchive] 检测日志源失败: {e}")
         if gc > 0:
             self._chat_source = "group_chat_context"
-        elif eb > 0:
-            self._chat_source = "event_bus"
-            if self.config.get("auto_enable_debug", False):
-                self._auto_enable_debug()
         else:
-            self._chat_source = "group_chat_context"
+            # 扫描 RawMessage（DBUG 级，含群号）与 event_bus（INFO 级）
+            raw = 0
+            try:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    for i, line in enumerate(f):
+                        if i >= 300:
+                            break
+                        if RAW_MESSAGE_RE.match(line):
+                            raw += 1
+            except Exception:
+                pass
+            if raw > 0:
+                self._chat_source = "rawmessage"
+            elif eb > 0:
+                self._chat_source = "event_bus"
+                if self.config.get("auto_enable_debug", False):
+                    self._auto_enable_debug()
+            else:
+                self._chat_source = "group_chat_context"
         logger.info(f"[GroupLogArchive] 日志源检测: {self._chat_source}")
 
     def _route_line(self, line: str, fallback_date: str) -> str:
@@ -293,7 +323,73 @@ class GroupLogArchive(Star):
         except Exception as e:
             logger.debug(f"[GroupLogArchive] 旧脚本检测失败: {e}")
 
-    def _is_group_allowed(self, gid: str) -> bool:
+    def _segments_to_text(self, segments) -> str:
+        """把 OneBot 消息段数组转成可读文本"""
+        if isinstance(segments, str):
+            return segments
+        parts = []
+        if isinstance(segments, list):
+            for seg in segments:
+                if not isinstance(seg, dict):
+                    continue
+                stype = seg.get("type", "")
+                data = seg.get("data", {}) or {}
+                if stype == "text":
+                    parts.append(str(data.get("text", "")))
+                elif stype == "image":
+                    parts.append("[图片]")
+                elif stype == "face":
+                    parts.append(f"[表情:{data.get('id', '')}]")
+                elif stype == "at":
+                    parts.append(f"[At:{data.get('qq', '')}]")
+                elif stype == "record":
+                    parts.append("[语音]")
+                elif stype == "video":
+                    parts.append("[视频]")
+                elif stype == "file":
+                    parts.append("[文件]")
+                elif stype == "reply":
+                    continue
+                else:
+                    parts.append(f"[{stype}]")
+        return " ".join(p for p in parts if p)
+
+    def _convert_rawmessage(self, line: str) -> str | None:
+        """把 RawMessage 行转换为统一归档行（含群号/昵称/内容），非群消息返回 None"""
+        m = RAW_MESSAGE_RE.match(line)
+        if not m:
+            return None
+        try:
+            d = json.loads(m.group(1))
+        except (json.JSONDecodeError, ValueError):
+            return None
+        if d.get("message_type") != "group":
+            return None
+        gid = d.get("group_id", "")
+        if not gid:
+            return None
+        sender = d.get("sender", {}) or {}
+        nickname = str(sender.get("nickname", "") or "")
+        if not nickname:
+            nickname = str(d.get("user_id", ""))
+        content_text = self._segments_to_text(d.get("message"))
+        if not content_text and d.get("raw_message"):
+            content_text = str(d["raw_message"])
+        ts = int(d.get("time", 0))
+        if ts:
+            dt = datetime.fromtimestamp(ts)
+            date_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+            time_str = dt.strftime("%H:%M:%S")
+        else:
+            date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            time_str = datetime.now().strftime("%H:%M:%S")
+        return (
+            f"[{date_str}.000] [Plug] [INFO] [astrbot.group_log_archive]: "
+            f"group_chat_context | pre-config:GroupMessage:{gid} | "
+            f"[{nickname}/{time_str}]: {content_text}"
+        )
+
+
         """群白名单判断：配置非空时，仅白名单中的群归档"""
         wl = self.config.get("group_whitelist", []) or []
         if not wl:
@@ -342,6 +438,10 @@ class GroupLogArchive(Star):
                     text = line.decode("utf-8", errors="replace")
                     if not self._is_chat_line(text):
                         continue
+                    if self._chat_source == "rawmessage":
+                        text = self._convert_rawmessage(text)
+                        if not text:
+                            continue
                     _gm = GROUP_ID_RE.search(text)
                     _gid = _gm.group(1) if _gm else "unknown"
                     if not self._is_group_allowed(_gid):
@@ -357,12 +457,17 @@ class GroupLogArchive(Star):
                 read_pos += len(buf)
                 text = buf.decode("utf-8", errors="replace")
                 if self._is_chat_line(text):
-                    _gm2 = GROUP_ID_RE.search(text)
-                    _gid2 = _gm2.group(1) if _gm2 else "unknown"
-                    if self._is_group_allowed(_gid2):
-                        target = self._route_line(text, fallback_date)
-                        text = self._sanitize(text)
-                        text = self._annotate_image(text)
+                    if self._chat_source == "rawmessage":
+                        text = self._convert_rawmessage(text)
+                        if not text:
+                            text = ""
+                    if text:
+                        _gm2 = GROUP_ID_RE.search(text)
+                        _gid2 = _gm2.group(1) if _gm2 else "unknown"
+                        if self._is_group_allowed(_gid2):
+                            target = self._route_line(text, fallback_date)
+                            text = self._sanitize(text)
+                            text = self._annotate_image(text)
                     with open(target, "a", encoding="utf-8") as out:
                         out.write(text + "\n")
                     exported += len(buf)
