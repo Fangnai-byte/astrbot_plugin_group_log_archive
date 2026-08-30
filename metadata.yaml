@@ -20,7 +20,7 @@ help: |
 version: 1.5.4
 
 # 作者名
-author: Fangnai-byte
+author: 綾地 寧々&Fangnai-byte
 
 # (可选) 插件 Logo 文件名（对应插件目录下的 logo.png）
 # 使用 GitHub 绝对链接，避免 Cloud 构建时资源不同步
