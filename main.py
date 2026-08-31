@@ -626,29 +626,37 @@ class GroupLogArchive(Star):
         )
 
     def _cleanup_logs(self) -> None:
-        """按配置删除归档目录中超过保留天数的日志文件"""
+        """按配置删除归档目录中超过保留天数的日志文件（按文件名日期判断）"""
         spec = self._parse_cleanup_config()
         if not spec:
             return
         days = spec[0]
-        cutoff = time.time() - days * 86400
         out_dir = self._out_dir()
         removed = 0
         try:
+            today = datetime.now().date()
             for fn in os.listdir(out_dir):
                 if not (fn.startswith("astrbot_") and fn.endswith(".log")):
                     continue
-                fp = os.path.join(out_dir, fn)
+                # 从文件名提取日期：astrbot_<群号>_YYYY-MM-DD.log
+                m = re.search(r"_(\d{4}-\d{2}-\d{2})\.log$", fn)
+                if not m:
+                    continue
                 try:
-                    if os.path.getmtime(fp) < cutoff:
+                    file_date = datetime.strptime(m.group(1), "%Y-%m-%d").date()
+                except ValueError:
+                    continue
+                if (today - file_date).days >= days:
+                    fp = os.path.join(out_dir, fn)
+                    try:
                         os.remove(fp)
                         removed += 1
-                except OSError:
-                    continue
+                    except OSError:
+                        continue
         except OSError as e:
             logger.warning(f"[GroupLogArchive] 清理日志失败: {e}")
         if removed:
-            logger.info(f"[GroupLogArchive] 清理过期日志 {removed} 个（保留 {days} 天）")
+            logger.info(f"[GroupLogArchive] 清理过期日志 {removed} 个（保留 {days} 天，按文件名日期）")
 
     async def _run_cleanup(self) -> None:
         try:
