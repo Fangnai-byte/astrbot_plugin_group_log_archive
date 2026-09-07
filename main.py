@@ -101,6 +101,11 @@ class GroupLogArchive(Star):
     def _log_prefix(self) -> str:
         return self.config.get("log_prefix", "astrbot.log")
 
+    def _bot_display_name(self) -> str:
+        """bot 发言的展示昵称：源日志统一记作 bot，归档显示为配置值，默认绫地宁宁"""
+        name = str(self.config.get("bot_display_name", "") or "").strip()
+        return name or "绫地宁宁"
+
     @property
     def _state_file(self) -> str:
         return os.path.join(self._out_dir(), ".export_state.json")
@@ -229,6 +234,13 @@ class GroupLogArchive(Star):
             text = QQ_SLASH_RE.sub(
                 lambda m: f"/{m.group(1)[:3]}****{m.group(1)[-3:]}:", text
             )
+        # bot 发言在源日志统一记作 "bot"，导出时替换为用户配置的展示昵称
+        # 锚定聊天头分隔符 "| ["，避免误改正文里恰好出现的 "[bot/时间]:" 文本
+        text = re.sub(
+            r"(\| )\[bot/(\d{2}:\d{2}:\d{2})\]:",
+            lambda m: f"{m.group(1)}[{self._bot_display_name()}/{m.group(2)}]:",
+            text,
+        )
         return text
 
     def _auto_enable_debug(self) -> bool:
@@ -373,6 +385,8 @@ class GroupLogArchive(Star):
         nickname = str(sender.get("nickname", "") or "")
         if not nickname:
             nickname = str(d.get("user_id", ""))
+        if nickname == "bot":
+            nickname = self._bot_display_name()
         content_text = self._segments_to_text(d.get("message"))
         if not content_text and d.get("raw_message"):
             content_text = str(d["raw_message"])
@@ -946,6 +960,8 @@ class GroupLogArchive(Star):
                 if _sender is not None
                 else ""
             )
+            if nickname == "bot":
+                nickname = self._bot_display_name()
             now = datetime.now()
             # 群号脱敏（与归档保持一致）
             out_group = group_id
@@ -1053,7 +1069,7 @@ class GroupLogArchive(Star):
                 f"[{now.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] [Plug] [INFO] "
                 f"[astrbot.group_log_archive]: group_chat_context | "
                 f"pre-config:GroupMessage:{out_group} | "
-                f"[bot/{now.strftime('%H:%M:%S')}]: {text}\n"
+                f"[{self._bot_display_name()}/{now.strftime('%H:%M:%S')}]: {text}\n"
             )
             out_dir = self._out_dir()
             log_path = os.path.join(

@@ -85,6 +85,7 @@
 | `image_caption` | AI 图片命名：调用识图模型为图片生成 5-6 字名称（消耗 API token） | `false` |
 | `image_caption_provider` | 命名用模型 Provider ID，留空自动选择支持视觉的模型 | 空 |
 | `record_bot_messages` | 记录 bot 自己的发言到归档（统计发言量） | `false` |
+| `bot_display_name` | 归档中 bot 发言显示的昵称（源日志固定记作 `bot`） | `绫地宁宁` |
 
 > 隐私提示：默认**不脱敏**，归档为原始记录（含群号/昵称/内容）。如需分享归档，建议开启脱敏配置。
 

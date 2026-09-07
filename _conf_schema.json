@@ -112,5 +112,11 @@
     "hint": "开启后 bot 发送的群消息也会记入归档（昵称显示为 bot），方便统计发言量。",
     "type": "bool",
     "default": false
+  },
+  "bot_display_name": {
+    "description": "bot 发言的展示昵称",
+    "hint": "归档里 bot 自己的发言默认显示为 bot，可改成机器人昵称（如 绫地宁宁），只影响展示不影响解析。",
+    "type": "text",
+    "default": "绫地宁宁"
   }
 }
