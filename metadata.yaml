@@ -24,10 +24,10 @@ author: 綾地 寧々&Fangnai-byte
 
 # (可选) 插件 Logo 文件名（对应插件目录下的 logo.png）
 # 使用 GitHub 绝对链接，避免 Cloud 构建时资源不同步
-logo: "https://raw.githubusercontent.com/NekoHome-Studio/astrbot_plugin_group_log_archive/main/logo.png"
+logo: "https://raw.githubusercontent.com/Fangnai-byte/astrbot_plugin_group_log_archive/main/logo.png"
 
 # (可选) 你的 GitHub 仓库地址
-repo: "https://github.com/NekoHome-Studio/astrbot_plugin_group_log_archive"
+repo: "https://github.com/Fangnai-byte/astrbot_plugin_group_log_archive"
 
 # (新增) 声明支持的平台
 support_platforms:
