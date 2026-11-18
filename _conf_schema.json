@@ -124,5 +124,11 @@
     "default": true,
     "description": "CDN 下载失败时改向 OneBot 要图",
     "hint": "QQ 图床有时对同一链接回 400，此时用 get_image 从 napcat 的缓存里取。"
+  },
+  "skip_sticker_images": {
+    "type": "bool",
+    "default": true,
+    "description": "跳过表情包，不下载也不存文件",
+    "hint": "表情按原始消息里的 sub_type 与 summary 识别，归档里只留一行文字记录。表情占群图片六成左右，跳过能省掉大半下载。"
   }
 }
