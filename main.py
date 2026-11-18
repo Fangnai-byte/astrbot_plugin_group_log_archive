@@ -982,6 +982,30 @@ class GroupLogArchive(Star):
             logger.debug(f"[GroupLogArchive] get_image 落盘失败: {e}")
         return False
 
+    @staticmethod
+    def _raw_image_flags(event) -> list[tuple[bool, str]]:
+        """按顺序给出每个图片段是不是表情、以及它的 summary。
+
+        AstrBot 的 Image 组件只留 file/url/path，sub_type 和 summary 在原始事件里。
+        sub_type 1/7/11/13 都是表情类，summary 不是「[图片]」的也算。
+        """
+        raw = getattr(getattr(event, "message_obj", None), "raw_message", None)
+        segs = raw.get("message") if isinstance(raw, dict) else None
+        flags: list[tuple[bool, str]] = []
+        if not isinstance(segs, list):
+            return flags
+        for seg in segs:
+            if not isinstance(seg, dict) or seg.get("type") != "image":
+                continue
+            data = seg.get("data") or {}
+            sub_type = str(data.get("sub_type", ""))
+            summary = str(data.get("summary") or "")
+            is_sticker = sub_type in ("1", "7", "11", "13") or (
+                summary and summary != "[图片]"
+            )
+            flags.append((bool(is_sticker), summary))
+        return flags
+
     # ---------------- 图片事件监听 ----------------
     @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
     async def on_group_image(self, event: AstrMessageEvent):
@@ -1014,8 +1038,14 @@ class GroupLogArchive(Star):
             tu_dir = os.path.join(out_dir, "tu", out_group)  # 按群分目录
             os.makedirs(tu_dir, exist_ok=True)
             saved = []
+            stickers = []
+            skip_sticker = bool(self.config.get("skip_sticker_images", True))
+            flags = self._raw_image_flags(event) if skip_sticker else []
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-                for img in images:
+                for idx, img in enumerate(images):
+                    if flags and idx < len(flags) and flags[idx][0]:
+                        stickers.append(flags[idx][1] or "[表情]")
+                        continue
                     src = img.file or img.url or ""
                     if not src:
                         continue
@@ -1048,13 +1078,18 @@ class GroupLogArchive(Star):
                             saved.append(f"tu/{out_group}/{fname}")
                     except Exception as e:
                         logger.debug(f"[GroupLogArchive] 单张图片保存失败: {e}")
-            if saved:
+            if saved or stickers:
                 # 追加归档记录（与导出的分群文件同格式）
                 line = (
                     f"[{now.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] [Plug] [INFO] "
                     f"[astrbot.group_log_archive]: group_chat_context | "
                     f"pre-config:GroupMessage:{out_group} | [{nickname}/{now.strftime('%H:%M:%S')}]: "
-                    f"[图片] " + " ".join(f"[图:{s}]" for s in saved) + "\n"
+                    f"[图片] "
+                    + " ".join(
+                        [f"[图:{s}]" for s in saved]
+                        + [f"[表情:{s}]" for s in stickers[:8]]
+                    )
+                    + "\n"
                 )
                 log_path = os.path.join(
                     out_dir, f"astrbot_{out_group}_{now.strftime('%Y-%m-%d')}.log"
@@ -1062,7 +1097,9 @@ class GroupLogArchive(Star):
                 with open(log_path, "a", encoding="utf-8") as f:
                     f.write(line)
                 logger.info(
-                    f"[GroupLogArchive] 图片已保存 {len(saved)} 张 → tu/（群 {out_group}）"
+                    f"[GroupLogArchive] 图片已保存 {len(saved)} 张"
+                    + (f"，跳过表情 {len(stickers)} 个" if stickers else "")
+                    + f" → tu/（群 {out_group}）"
                 )
                 # AI 命名（后台异步，不阻塞事件处理）
                 if self.config.get("image_caption", False):
