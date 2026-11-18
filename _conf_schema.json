@@ -118,5 +118,11 @@
     "hint": "归档里 bot 自己的发言默认显示为 bot，可改成机器人昵称（如 绫地宁宁），只影响展示不影响解析。",
     "type": "text",
     "default": "绫地宁宁"
+  },
+  "image_fallback_get_image": {
+    "type": "bool",
+    "default": true,
+    "description": "CDN 下载失败时改向 OneBot 要图",
+    "hint": "QQ 图床有时对同一链接回 400，此时用 get_image 从 napcat 的缓存里取。"
   }
 }
