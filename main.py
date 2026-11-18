@@ -940,6 +940,48 @@ class GroupLogArchive(Star):
         except Exception as e:
             logger.error(f"[GroupLogArchive] 最终导出失败: {e}")
 
+    async def _save_via_onebot(self, event, img, dest: str) -> bool:
+        """向 OneBot 要图。返回是否真的写下了文件。
+
+        get_image 在 napcat 上返回 base64:// 或 file:// 或裸路径，三种都认。
+        """
+        bot = getattr(event, "bot", None)
+        call = getattr(bot, "call_action", None)
+        if call is None:
+            return False
+        key = img.file or img.url or ""
+        if not key:
+            return False
+        try:
+            res = await call("get_image", file=key)
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"[GroupLogArchive] get_image 失败: {e}")
+            return False
+        data = ""
+        if isinstance(res, dict):
+            data = str(res.get("file") or res.get("path") or "")
+        if not data:
+            return False
+        try:
+            if data.startswith("base64://"):
+                with open(dest, "wb") as f:
+                    f.write(base64.b64decode(data[len("base64://"):]))
+                return True
+            if data.startswith("file://"):
+                # file:///C:/x/y.jpg 直接切前缀会得到 /C:/x/y.jpg，Windows 上打不开
+                from urllib.parse import unquote, urlparse
+                from urllib.request import url2pathname
+
+                path = url2pathname(unquote(urlparse(data).path))
+            else:
+                path = data
+            if os.path.exists(path):
+                shutil.copy2(path, dest)
+                return True
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"[GroupLogArchive] get_image 落盘失败: {e}")
+        return False
+
     # ---------------- 图片事件监听 ----------------
     @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
     async def on_group_image(self, event: AstrMessageEvent):
@@ -989,6 +1031,13 @@ class GroupLogArchive(Star):
                                 with open(dest, "wb") as f:
                                     f.write(r.content)
                                 saved.append(f"tu/{out_group}/{fname}")
+                            elif self.config.get("image_fallback_get_image", True):
+                                # ★ 2026-11-19：QQ 图床时不时回 400（同一 URL 走代理、
+                                #   直连、换 UA 都一样），这时改问 OneBot 要图——
+                                #   napcat 手里一般还留着缓存，走 get_image 能拿到
+                                #   base64 或本地路径，比死磕 CDN 靠谱。
+                                if await self._save_via_onebot(event, img, dest):
+                                    saved.append(f"tu/{out_group}/{fname}")
                         elif src.startswith("file://"):
                             p = src[len("file://"):]
                             if os.path.exists(p):
