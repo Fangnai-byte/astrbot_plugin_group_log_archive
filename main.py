@@ -1006,6 +1006,17 @@ class GroupLogArchive(Star):
             flags.append((bool(is_sticker), summary))
         return flags
 
+    @staticmethod
+    def _is_qq_image(url: str) -> bool:
+        """是不是 QQ 图床的地址。只有这类链接的 rkey 会按会话过期。"""
+        try:
+            from urllib.parse import urlparse
+
+            host = (urlparse(url).hostname or "").lower()
+        except Exception:
+            return False
+        return host.endswith("qq.com") or host.endswith("qq.com.cn") or host.endswith("qpic.cn")
+
     # ---------------- 图片事件监听 ----------------
     @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
     async def on_group_image(self, event: AstrMessageEvent):
@@ -1056,18 +1067,29 @@ class GroupLogArchive(Star):
                     dest = os.path.join(tu_dir, fname)
                     try:
                         if src.startswith(("http://", "https://")):
-                            r = await client.get(src)
-                            if r.status_code == 200 and r.content:
-                                with open(dest, "wb") as f:
-                                    f.write(r.content)
+                            # ★ 2026-11-26：图床回 400 的真实原因是 rkey 失效
+                            #   （retcode -5503010 invalid rkey）。rkey 绑会话、按小时过期，
+                            #   SL 一重连旧链接就全废。所以 QQ 图床地址改成先问 OneBot：
+                            #   客户端手里是现行会话，取图或读本地缓存都不会碰上过期。
+                            done = False
+                            prefer_onebot = (
+                                self.config.get("image_prefer_onebot", True)
+                                and self._is_qq_image(src)
+                            )
+                            if prefer_onebot:
+                                done = await self._save_via_onebot(event, img, dest)
+                            if not done:
+                                r = await client.get(src)
+                                if r.status_code == 200 and r.content:
+                                    with open(dest, "wb") as f:
+                                        f.write(r.content)
+                                    done = True
+                                elif not prefer_onebot and self.config.get(
+                                    "image_fallback_get_image", True
+                                ):
+                                    done = await self._save_via_onebot(event, img, dest)
+                            if done:
                                 saved.append(f"tu/{out_group}/{fname}")
-                            elif self.config.get("image_fallback_get_image", True):
-                                # ★ 2026-11-19：QQ 图床时不时回 400（同一 URL 走代理、
-                                #   直连、换 UA 都一样），这时改问 OneBot 要图——
-                                #   napcat 手里一般还留着缓存，走 get_image 能拿到
-                                #   base64 或本地路径，比死磕 CDN 靠谱。
-                                if await self._save_via_onebot(event, img, dest):
-                                    saved.append(f"tu/{out_group}/{fname}")
                         elif src.startswith("file://"):
                             p = src[len("file://"):]
                             if os.path.exists(p):
