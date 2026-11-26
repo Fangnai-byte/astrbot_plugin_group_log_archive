@@ -130,5 +130,11 @@
     "default": true,
     "description": "跳过表情包，不下载也不存文件",
     "hint": "表情按原始消息里的 sub_type 与 summary 识别，归档里只留一行文字记录。表情占群图片六成左右，跳过能省掉大半下载。"
+  },
+  "image_prefer_onebot": {
+    "type": "bool",
+    "default": true,
+    "description": "QQ 图床的图片优先问 OneBot 要",
+    "hint": "图床链接里的 rkey 会随会话过期（invalid rkey），直接下载常回 400。优先走 get_image，失败再退回 HTTP。"
   }
 }
